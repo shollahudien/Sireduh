@@ -1,0 +1,139 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+[x-cloak] {
+    display: none !important;
+}
+
+/* ===== Animasi navbar publik ===== */
+@keyframes navbar-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@keyframes logo-wave {
+    0%, 100% { transform: rotate(0deg) scale(1); }
+    25% { transform: rotate(-10deg) scale(1.08); }
+    75% { transform: rotate(10deg) scale(1.08); }
+}
+
+@keyframes float-soft {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+}
+
+.navbar-shimmer {
+    background-size: 200% 100%;
+    animation: navbar-shimmer 8s linear infinite;
+}
+
+.nav-logo:hover .nav-logo-icon {
+    animation: logo-wave 0.7s ease-in-out;
+}
+
+/* ===== Maskot robot sidebar (Teduh Bot) ===== */
+@keyframes botmascot-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+@keyframes botmascot-bob {
+    0%, 100% { transform: rotate(0deg); }
+    33% { transform: rotate(-9deg); }
+    66% { transform: rotate(9deg); }
+}
+
+@keyframes botmascot-blink {
+    0%, 92%, 100% { transform: scaleY(1); }
+    95% { transform: scaleY(0.08); }
+}
+
+@keyframes botmascot-bubble {
+    0%, 100% { transform: translateY(0) scale(1); opacity: 1; }
+    50% { transform: translateY(-3px) scale(1.03); opacity: 0.94; }
+}
+
+.bot-mascot { animation: botmascot-float 3s ease-in-out infinite; }
+.bot-mascot .botm-antenna { animation: botmascot-bob 1.7s ease-in-out infinite; transform-box: fill-box; transform-origin: center bottom; }
+.bot-mascot .botm-eye { animation: botmascot-blink 4.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.bot-mascot .botm-bubble { animation: botmascot-bubble 2.6s ease-in-out infinite; }
+
+/* ===== Command palette (pencarian global admin) ===== */
+@keyframes palette-group-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Gelembung hanya muncul saat maskot di-hover (mode .bot-bubble-hover) */
+.bot-bubble-hover .botm-bubble {
+    opacity: 0;
+    animation: none;
+    transform: translateY(3px) scale(0.95);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+}
+.bot-bubble-hover .bot-mascot:hover .botm-bubble {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    animation: botmascot-bubble 2.6s ease-in-out infinite;
+}
+
+/* ===== Tabel responsif: jadi daftar kartu di HP, tabel normal di ≥768px ===== */
+@media (max-width: 767px) {
+    .rtable, .rtable tbody { display: block; width: 100%; }
+    .rtable thead { display: none; }
+    .rtable tr {
+        display: block;
+        padding: 0.6rem 0.85rem;
+        border-bottom: 1px solid #eef2f0;
+    }
+    .rtable tbody tr:last-child { border-bottom: none; }
+    .rtable td {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.3rem 0.15rem;
+        text-align: right;
+        white-space: normal;
+        max-width: none;
+    }
+    .rtable td::before {
+        content: attr(data-label);
+        font-size: 0.6rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #6b7280;
+        text-align: left;
+        flex-shrink: 0;
+        padding-top: 0.1rem;
+    }
+    .rtable td:not([data-label]) { justify-content: center; }
+    .rtable td:not([data-label])::before { content: none; }
+    .rtable td[colspan] { display: block; text-align: center; padding: 2.25rem 1rem; }
+    .rtable td[colspan]::before { content: none; }
+    .rtable td[data-center] { justify-content: space-between; }
+    .rtable img { max-width: 3.5rem; }
+}
+
+/* Tablet: tabel tetap penuh lebar, tanpa paksaan min-width */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .rtable { min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .navbar-shimmer {
+        animation: none;
+    }
+    .bot-mascot, .bot-mascot .botm-antenna, .bot-mascot .botm-eye, .bot-mascot .botm-bubble {
+        animation: none !important;
+    }
+}
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}

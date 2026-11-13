@@ -1,0 +1,80 @@
+@extends('layouts.app')
+@section('title', 'Beranda')
+
+@section('content')
+{{-- Hero --}}
+<div class="relative rounded-2xl overflow-hidden bg-green-800 text-white mb-12"
+     style="min-height:360px; background-image:linear-gradient(135deg,#14532d 0%,#166534 50%,#15803d 100%);">
+    <div class="absolute inset-0 opacity-10"
+         style="background-image:url('https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?w=1200');
+                background-size:cover;background-position:center;"></div>
+    <div class="relative z-10 flex flex-col items-center justify-center text-center px-6 py-24">
+        <h1 class="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow">🏕️ BUMDes Wisata Teduh</h1>
+        <p class="text-lg md:text-xl text-green-100 mb-8 max-w-xl">
+            Pengalaman glamping & wisata alam terbaik di pedesaan. Reservasi mudah, check-in cepat.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3">
+            <a href="{{ route('ticket.index') }}"
+               class="bg-yellow-400 text-green-950 font-bold px-8 py-3 rounded-full shadow-lg hover:bg-yellow-300 transition text-lg">
+                🎫 Beli Tiket Masuk
+            </a>
+            <a href="{{ route('checkout') }}"
+               class="bg-white text-green-800 font-bold px-8 py-3 rounded-full shadow-lg hover:bg-green-50 transition text-lg">
+                🏕️ Reservasi Menginap
+            </a>
+        </div>
+    </div>
+</div>
+
+{{-- Unit List --}}
+<section>
+    <h2 class="text-2xl font-bold text-green-800 mb-6">Unit Tersedia</h2>
+    <div x-data="unitList()" x-init="load()" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <template x-if="loading">
+            <div class="col-span-3 text-center text-gray-400 py-12">Memuat unit...</div>
+        </template>
+        <template x-for="unit in units" :key="unit.id">
+            <div class="bg-white rounded-xl shadow hover:shadow-md transition border border-gray-100 overflow-hidden">
+                <template x-if="unit.images?.length">
+                    <img :src="unit.images?.[0]?.url" :alt="unit.name" class="w-full h-40 object-cover">
+                </template>
+                <div x-show="!unit.images?.length" x-cloak class="bg-green-100 h-40 flex items-center justify-center text-5xl">🏕️</div>
+                <div class="p-5">
+                    <h3 class="font-bold text-lg text-gray-800" x-text="unit.name"></h3>
+                    <p class="text-sm text-gray-500 capitalize mb-2" x-text="unit.type"></p>
+                    <p class="text-green-700 font-semibold text-lg"
+                       x-text="'Rp ' + parseInt(unit.price).toLocaleString('id-ID') + ' / malam'"></p>
+                    <p class="text-xs text-gray-400 mb-4" x-text="'Kapasitas: ' + unit.capacity + ' orang'"></p>
+                    <a href="{{ url('/checkout') }}"
+                       class="block w-full text-center bg-green-700 text-white py-2 rounded-lg hover:bg-green-800 transition font-semibold">
+                        Reservasi
+                    </a>
+                </div>
+            </div>
+        </template>
+        <template x-if="!loading && units.length === 0">
+            <div class="col-span-3 text-center text-gray-400 py-12">Belum ada unit tersedia.</div>
+        </template>
+    </div>
+</section>
+
+<script>
+function unitList() {
+    return {
+        units: [],
+        loading: true,
+        async load() {
+            try {
+                const r = await fetch('/api/units');
+                const json = await r.json();
+                this.units = json.data ?? [];
+            } catch(e) {
+                this.units = [];
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+}
+</script>
+@endsection
