@@ -3,7 +3,7 @@
 # 🏕️ SIRESTEDUH
 ### Sistem Reservasi & Manajemen Wisata — BUMDes Wisata Teduh
 
-Aplikasi web terintegrasi untuk reservasi glamping/tiket masuk, verifikasi pembayaran, operasional kasir (POS), check-in e-ticket QR, hingga laporan & monitoring admin.
+Aplikasi web terintegrasi untuk **reservasi glamping & tiket masuk**, **pembayaran (manual/Midtrans)**, **verifikasi & e-ticket QR**, **operasional kasir (POS)**, **check-in petugas**, hingga **laporan, audit, dan monitoring admin**.
 
 ![Laravel](https://img.shields.io/badge/Laravel-13-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)
 ![PHP](https://img.shields.io/badge/PHP-8.3%2B-777BB4?style=for-the-badge&logo=php&logoColor=white)
@@ -11,19 +11,41 @@ Aplikasi web terintegrasi untuk reservasi glamping/tiket masuk, verifikasi pemba
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=for-the-badge&logo=vite&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
+<sub>Repo: <a href="https://github.com/shollahudien/Sireduh">github.com/shollahudien/Sireduh</a></sub>
+
 </div>
 
 ---
 
 ## Daftar Isi
 
-- [Fitur Utama](#-fitur-utama)
+- [Ringkasan](#-ringkasan)
+- [Keunggulan Utama](#-keunggulan-utama)
+- [Keamanan & Perlindungan Data (Lengkap)](#-keamanan--perlindungan-data-lengkap)
+  - [Autentikasi & Kontrol Akses](#1-autentikasi--kontrol-akses-rbac)
+  - [Perlindungan Endpoint & Anti-Penyalahgunaan](#2-perlindungan-endpoint--anti-penyalahgunaan-rate-limiting)
+  - [Keamanan Pembayaran & Transaksi](#3-keamanan-pembayaran--transaksi)
+  - [Integritas Data & Konsistensi Bisnis](#4-integritas-data--konsistensi-bisnis)
+  - [Audit Trail, Logging & Retensi](#5-audit-trail-logging--retensi)
+  - [Privasi File & Proteksi Data Sensitif](#6-privasi-file--proteksi-data-sensitif)
+  - [Mode Maintenance & Ketersediaan Terkontrol](#7-mode-maintenance--ketersediaan-terkontrol)
+  - [Validasi Input & Keamanan Aplikasi Web](#8-validasi-input--keamanan-aplikasi-web)
+  - [Keamanan Webhook & Integrasi Eksternal](#9-keamanan-webhook--integrasi-eksternal)
+  - [Praktik Keamanan Deployment](#10-praktik-keamanan-deployment)
+- [Fitur Lengkap per Modul](#-fitur-lengkap-per-modul)
+  - [Tamu / Publik](#a-tamu--publik)
+  - [Admin](#b-admin)
+  - [Kasir / POS & Kasir Makanan](#c-kasir--pos--kasir-makanan)
+  - [Petugas Check-in](#d-petugas-check-in)
+  - [API & Akses Eksternal](#e-api--akses-eksternal)
+- [Integrasi & Otomasi](#-integrasi--otomasi)
+- [Operasional, Keandalan & Performa](#-operasional-keandalan--performa)
 - [Tech Stack](#-tech-stack)
 - [Prasyarat](#-prasyarat)
-- [Instalasi Lokal](#-instalasi--menjalankan-lokal)
+- [Instalasi & Menjalankan (Lokal)](#-instalasi--menjalankan-lokal)
 - [Konfigurasi .env](#️-konfigurasi-env)
 - [Testing](#-testing)
-- [Panduan Deploy / Upload Hosting](#-panduan-deploy--upload-hosting-lengkap)
+- [Panduan Deploy / Upload Hosting (Lengkap)](#-panduan-deploy--upload-hosting-lengkap)
   - [Checklist Sebelum Deploy](#1-checklist-sebelum-deploy)
   - [Siapkan Paket Deploy](#2-siapkan-paket-deploy-disarankan)
   - [Opsi A — Shared Hosting / cPanel](#opsi-a--shared-hosting--cpanel-upload-zip)
@@ -33,42 +55,214 @@ Aplikasi web terintegrasi untuk reservasi glamping/tiket masuk, verifikasi pemba
   - [Konfigurasi Webhook & URL Publik](#4-konfigurasi-webhook--url-publik)
   - [Update / Deploy Ulang](#5-update--deploy-ulang)
   - [Troubleshooting](#6-troubleshooting-umum)
-- [Struktur Proyek](#-gambaran-struktur-proyek)
-- [Catatan Keamanan](#-catatan-keamanan)
+- [Gambaran Struktur Proyek](#-gambaran-struktur-proyek)
+- [Catatan Keamanan Operasional](#-catatan-keamanan-operasional)
+- [Kontribusi](#-kontribusi)
 - [Lisensi](#-lisensi)
 
 ---
 
-## ✨ Fitur Utama
+## 📌 Ringkasan
 
-### 🌿 Tamu (Publik)
-- **Reservasi online** unit glamping & pembelian tiket masuk.
-- **Cek ketersediaan** unit/tiket secara real-time.
-- **Pembayaran**: unggah bukti transfer manual atau pembayaran via **Midtrans** (QRIS/VA/e-wallet, sesuai konfigurasi).
-- **E-Ticket QR** untuk check-in, plus halaman cek status pesanan.
-- **Chatbot “Teduh Bot”** (AI/Gemini) dengan dukungan suara (TTS) untuk bantuan informasi.
-- **PWA-ready** (manifest & service worker).
+**SIRESTEDUH** adalah sistem manajemen wisata end-to-end untuk BUMDes Wisata Teduh yang mencakup alur:
 
-### 🛠️ Admin
-- **Dashboard & analitik** operasional.
-- **Manajemen reservasi & verifikasi pembayaran** (terima/tolak).
-- **Master data**: unit, gambar unit, produk, paket glamping/aula, pengguna.
-- **Kirim/ulang e-ticket** ke tamu.
-- **Laporan** terpadu & pencarian global.
-- **Maintenance mode**, **log viewer**, dan **activity feed/audit log** (dengan retensi & prune).
-- **Notifikasi** (integrasi Telegram webhook/bot sesuai konfigurasi).
+**Pemesanan tamu → Pembayaran (transfer/manual atau gateway otomatis) → Verifikasi/admin → Penerbitan & pengiriman e-ticket QR → Check-in di lokasi → Pencatatan transaksi POS & pelaporan.**
 
-### 💳 Kasir & Check-in
-- **POS Kasir**: transaksi produk/unit dengan perhitungan stok.
-- **Kasir Makanan (F&B)**: POS khusus kategori makanan.
-- **Petugas Check-in**: pemindaian/validasi e-ticket QR dan riwayat check-in.
+Aplikasi dirancang agar operasional harian lebih rapi, aman, dan mudah dipantau (dengan kontrol akses berbasis peran, audit log, pembatasan akses saat gangguan/maintenance, serta automasi pembersihan data operasional).
 
-### 🔌 Integrasi & Lainnya
-- **API** publik & autentikasi token (Laravel Sanctum).
-- **Pembayaran**: Midtrans + transfer manual.
-- **Notifikasi**: Fonnte (WhatsApp) & Telegram (opsional).
-- **AI Chatbot**: Google Gemini (chat & TTS, opsional).
-- **QR Code** e-ticket (`chillerlan/php-qrcode`).
+---
+
+## 🌟 Keunggulan Utama
+
+| Area | Keunggulan |
+|---|---|
+| **End-to-end** | Satu sistem untuk reservasi, pembayaran, verifikasi, e-ticket, check-in, POS, dan laporan. |
+| **Multi-peran** | Akses terpisah dan terkontrol untuk **Admin**, **Kasir**, **Kasir Makanan**, dan **Petugas Check-in**. |
+| **Pembayaran fleksibel** | Mendukung **unggah bukti transfer manual** dan **pembayaran otomatis Midtrans** (Snap: QRIS/GoPay/ShopeePay/VA, sesuai konfigurasi). |
+| **Keamanan berlapis** | RBAC, rate limiting, proteksi webhook (signature/secret), penyimpanan bukti privat, audit log dengan redaksi data sensitif, dan validasi input. |
+| **Konsistensi transaksi** | Pemrosesan kritikal memakai transaksi DB/penguncian (lock) & penanganan idempotent pada notifikasi gateway untuk mencegah duplikasi. |
+| **Operasional otomatis** | Scheduler untuk kedaluwarsa reservasi pending, pruning log/activity/token/cache, serta dukungan queue. |
+| **Transparansi & audit** | Pencatatan aktivitas/riwayat (activity feed, log viewer) dengan retensi yang dapat dikelola. |
+| **Kemudahan tamu** | Ketersediaan real-time, status pesanan, e-ticket QR, chatbot bantuan (AI) & PWA-ready. |
+| **Siap deploy** | Mendukung shared hosting/cPanel, VPS (Nginx/Apache), skrip penyiapan paket deploy, dan panduan operasional lengkap. |
+
+---
+
+## 🔐 Keamanan & Perlindungan Data (Lengkap)
+
+Bagian ini merangkum kontrol keamanan yang **diimplementasikan di aplikasi** (middleware, service, controller, konfigurasi, dan automasi). Selalu kombinasikan dengan praktik deploy yang benar (HTTPS, `APP_DEBUG=false`, server aman).
+
+### 1. Autentikasi & Kontrol Akses (RBAC)
+
+- **Role-Based Access Control (RBAC)** melalui middleware `role`:
+  - Rute admin dilindungi `auth` + `role:admin`.
+  - POS utama dilindungi `role:kasir`.
+  - POS F&B dilindungi `role:kasir_makanan`.
+  - Modul check-in petugas dilindungi `role:checkin`.
+- **Penanganan akses terstruktur**:
+  - Pengguna belum login: diarahkan ke halaman login (web) atau mendapat respons `401 Unauthenticated` (API/JSON).
+  - Pengguna login tanpa hak akses: ditolak dengan `403 Forbidden` (API/JSON) atau dialihkan dengan pesan error (web).
+- **Dua mekanisme autentikasi sesuai kebutuhan**:
+  - **Session-based (web & API same-origin)**: cookie session Laravel digunakan untuk autentikasi permintaan dari antarmuka aplikasi.
+  - **Token-based (API eksternal)**: Laravel Sanctum (`/api/auth/login`, `/api/auth/me`, `/api/auth/logout`) untuk akses API terautentikasi.
+
+### 2. Perlindungan Endpoint & Anti-Penyalahgunaan (Rate Limiting)
+
+Pembatasan laju diterapkan untuk mengurangi brute-force, spam, dan penyalahgunaan resource:
+
+| Endpoint / Aksi | Batas (ringkasan) |
+|---|---|
+| Login API token (`POST /api/auth/login`) | `throttle:10,1` |
+| Login web (rate limiter `login`) | 5 percobaan/menit per kombinasi **email + IP** |
+| API publik umum (units, availability, products, chatbot, payment show/upload, dll.) | `throttle:60,1` |
+| Pembuatan reservasi (`reservations-store`) | **3/menit** dan **15/jam** per IP |
+| Chatbot tanya (`/api/chat`) | 15/menit |
+| Chatbot suara/TTS (`/api/chat/speak`) | 10/menit |
+| Webhook Telegram | 60/menit |
+| Notifikasi Midtrans | 60/menit |
+
+Respons batasan memberi kode/umpan balik yang jelas (mis. `429`) agar klien tahu harus menunggu.
+
+### 3. Keamanan Pembayaran & Transaksi
+
+- **Verifikasi tanda tangan notifikasi Midtrans**: notifikasi gateway divalidasi menggunakan signature (`hash('sha512', order_id + status_code + gross_amount + server_key)`) sebelum diproses — mencegah callback palsu.
+- **Idempotensi & anti-duplikasi**: notifikasi pembayaran yang sama/berulang ditangani secara aman (pengecekan status & pemrosesan terkontrol) sehingga konfirmasi tidak diproses ganda.
+- **Pemrosesan atomik**: pembaruan status pembayaran/reservasi kritikal dilakukan dalam **transaksi database** dengan penguncian record (`lockForUpdate`) pada alur notifikasi gateway untuk menjaga konsistensi.
+- **Pemisahan metode bayar**: mendukung transfer manual (unggah bukti) dan gateway otomatis (Midtrans Snap) dengan pencatatan status pembayaran.
+- **Penerbitan e-ticket terkontrol**: e-ticket dipastikan/dibuat saat pembayaran terkonfirmasi dan dapat dikirim/diulang sesuai alur verifikasi/admin.
+- **Bukti bayar tidak dipublikasikan langsung**: file bukti disimpan di disk **private** (bukan akses publik langsung) dan hanya dapat diakses melalui route admin terproteksi.
+- **Akses bukti ter-audit**: pembukaan/streaming bukti pembayaran oleh admin dicatat (audit log).
+
+### 4. Integritas Data & Konsistensi Bisnis
+
+- **Kedaluwarsa reservasi pending otomatis**: scheduler menjalankan `reservations:expire-pending` (setiap menit) agar reservasi tanpa pembayaran tidak menahan ketersediaan/stok selamanya.
+- **Pembatalan aman & pengembalian stok addon**: pembatalan (manual/terkait alur tertentu) memproses perubahan status dan pengembalian stok produk tambahan secara terkontrol dalam transaksi.
+- **Ketersediaan unit berbasis status aktif**: ketersediaan/slot dihitung dari reservasi berstatus pemblokir (bukan sekadar angka statis), membantu mencegah konflik pemesanan.
+- **Validasi status sebelum aksi**: unggah bukti/aksi pembayaran dibatasi pada status reservasi/pembayaran yang valid (mencegah transisi tidak sah).
+- **Konsistensi stok POS**: transaksi POS memvalidasi ketersediaan/stok dan menolak kuantitas tidak valid/kosong (sesuai skenario pengujian & logika aplikasi).
+
+### 5. Audit Trail, Logging & Retensi
+
+- **Activity logging**: middleware mencatat aktivitas/permintaan (user/tamu, method, path/route, status, metadata relevan, request id, IP, user agent) untuk jejak operasional.
+- **AuditLogger terpusat** untuk event penting (mis. pembuatan transaksi gateway, unggah/lihat bukti, status gateway, dll.) dengan label subjek & properti terstruktur.
+- **Redaksi data sensitif otomatis**: kunci sensitif (mis. `password`, token, secret, signature, authorization, cookie/session, dsb.) **disamarkan (`[REDACTED]`)** saat disimpan di properti audit.
+- **Metadata file aman & berguna**: untuk unggah/akses file tertentu dicatat metadata (nama, mime, ukuran, hash/path sesuai konteks) tanpa mengekspos kredensial.
+- **Log viewer & activity feed (admin)**: admin dapat meninjau log/aplikasi aktivitas melalui modul admin (dengan pembatasan akses admin).
+- **Retensi & pembersihan terjadwal**: pruning activity/log, pembersihan token Sanctum kedaluwarsa, dan pembersihan cache terjadwal untuk menjaga kebersihan data & performa.
+
+### 6. Privasi File & Proteksi Data Sensitif
+
+- **Bukti pembayaran privat**: disimpan di storage private (`Storage::disk('private')`) dan diakses via controller admin (`/admin/proofs/{reservation}`) — bukan file publik.
+- **`.env` & secret tidak untuk repo**: konfigurasi rahasia disimpan di environment server; `.env` diabaikan Git.
+- **File sensitif lokal diabaikan**: `.gitignore` mencakup `.env`, `cookies.txt` (dump sesi lokal), dan artefak sensitif/lokal lainnya; `cookies.txt` tidak dipush.
+- **Tidak mengekspos kredensial di audit**: redaksi otomatis pada audit/log properti.
+
+### 7. Mode Maintenance & Ketersediaan Terkontrol
+
+- **Maintenance mode berbasis pengaturan aplikasi**: saat diaktifkan, akses dibatasi untuk publik/pengguna non-admin.
+- **Admin tetap dapat akses** (untuk perbaikan/operasional) dan **halaman login tetap dapat diakses** agar admin bisa masuk.
+- **Respons sesuai konteks**: API mengembalikan JSON `503` (status maintenance) dengan pesan; web menampilkan halaman maintenance.
+- **Diterapkan pada web & API** (middleware dijalankan setelah session dimuat) untuk perilaku konsisten.
+
+### 8. Validasi Input & Keamanan Aplikasi Web
+
+- **Validasi sisi server** pada input penting (mis. pembuatan reservasi, unggah bukti pembayaran: wajib file gambar, batas ukuran, order code valid; endpoint Midtrans memvalidasi order).
+- **Pembatasan jenis/ukuran unggah bukti**: upload bukti pembayaran dibatasi ke **image** dengan ukuran maksimum **2 MB** (sesuai aturan controller).
+- **Pemisahan akses & pengecekan kepemilikan/order**: endpoint pembayaran/reservasi publik bekerja berbasis identitas order (mis. `order_code`) dan memeriksa status yang diizinkan.
+- **Proteksi CSRF & session**: aplikasi web Blade menyertakan token CSRF; API same-origin dikonfigurasi dengan middleware cookie/session yang relevan.
+- **Penanganan error API**: respons JSON konsisten untuk permintaan API/JSON pada kondisi error/exception tertentu.
+
+### 9. Keamanan Webhook & Integrasi Eksternal
+
+- **Telegram webhook**: mendukung verifikasi **secret token header** (`X-Telegram-Bot-Api-Secret-Token`) bila dikonfigurasi; callback query diproses dengan pencocokan data & pengecekan entitas reservasi.
+- **Midtrans webhook**: signature diverifikasi; payload dicatat/ditangani dengan kontrol status & logging untuk investigasi.
+- **Token Sanctum**: token kedaluwarsa dapat dipangkas otomatis oleh scheduler (`sanctum:prune-expired`).
+
+### 10. Praktik Keamanan Deployment
+
+- Jalankan produksi dengan **`APP_ENV=production`** dan **`APP_DEBUG=false`**.
+- Gunakan **HTTPS** (`APP_URL` https) dan aktifkan SSL di hosting.
+- Arahkan **document root ke `public/`** (wajib untuk Laravel) agar kode sumber & `.env` tidak terekspos.
+- Set permission yang benar (`storage/`, `bootstrap/cache/` writable) tanpa memberi izin berlebihan.
+- Lindungi kredensial (`DB`, Midtrans, Fonnte, Telegram, Gemini) di `.env` server dan rotasi bila bocor.
+- Aktifkan **cron scheduler** & (jika perlu) **queue worker** agar kontrol otomatis (expiry/prune) berjalan.
+
+> **Catatan:** Tidak ada sistem yang 100% kebal. Keamanan efektif bergantung pada konfigurasi server/hosting, pembaruan dependensi, manajemen kredensial, dan prosedur operasional.
+
+---
+
+## 🧩 Fitur Lengkap per Modul
+
+### A. Tamu / Publik
+- **Beranda & eksplorasi unit**: melihat informasi dan unit tersedia.
+- **Reservasi online**: pemesanan unit glamping / paket sesuai ketersediaan.
+- **Pembelian/akses tiket masuk** (sesuai alur aplikasi).
+- **Cek ketersediaan** unit/tiket secara real-time (endpoint availability/units).
+- **Checkout & pembayaran**:
+  - Unggah **bukti transfer manual**.
+  - Pembayaran otomatis via **Midtrans Snap** (metode mengikuti konfigurasi, mis. QRIS, GoPay, ShopeePay, VA bank).
+- **Halaman pembayaran & status pesanan** berdasarkan order.
+- **E-Ticket QR** untuk check-in.
+- **Pencarian/cek status pesanan tamu**.
+- **Chatbot “Teduh Bot”** (AI/Gemini) untuk bantuan informasi, dengan opsi suara/TTS (jika dikonfigurasi).
+- **PWA-ready**: manifest & service worker untuk pengalaman mirip aplikasi.
+
+### B. Admin
+- **Dashboard & analitik operasional**.
+- **Notifikasi admin** & **pencarian global** (command palette).
+- **Manajemen reservasi**: lihat, verifikasi, dan pembatalan sesuai alur.
+- **Verifikasi pembayaran** (terima/tolak) dan alur penerbitan e-ticket.
+- **Kirim/ulang e-ticket** ke tamu (manual resend).
+- **Master data**:
+  - Unit (CRUD, stok, gambar unit).
+  - Produk.
+  - Paket glamping & paket aula.
+  - Pengguna/user.
+- **Laporan** terpadu.
+- **Maintenance mode** (aktif/nonaktif & pesan).
+- **Log viewer** dan **activity feed/audit** (termasuk retensi & pembersihan).
+- **Akses bukti pembayaran privat** khusus admin.
+
+### C. Kasir / POS & Kasir Makanan
+- **POS Kasir (`/pos`)**: transaksi penjualan (produk/unit) dengan validasi item/stok dan riwayat.
+- **Kasir Makanan / F&B (`/kasir-makanan`)**: mode POS khusus penjualan kategori makanan, terpisah hak aksesnya.
+- **Riwayat transaksi** untuk masing-masing peran.
+
+### D. Petugas Check-in
+- **Halaman check-in/scanner** untuk validasi e-ticket QR.
+- **Tampilan tiket & riwayat check-in**.
+- **Pencegahan penyalahgunaan tiket** (validasi tiket; tiket yang tidak valid/sudah dipakai ditolak sesuai logika pengujian).
+
+### E. API & Akses Eksternal
+- **Endpoint publik**: ketersediaan, unit/tiket, produk, reservasi, chatbot, info/upload pembayaran, Midtrans create/notification.
+- **Autentikasi token (Sanctum)** untuk klien eksternal (`/api/auth/*`).
+- **API admin** (terproteksi auth+role) untuk dashboard, notifikasi, verifikasi, laporan, master data, logs/activity, dsb.
+- **Endpoint webhook**: Telegram & notifikasi Midtrans.
+
+---
+
+## 🔌 Integrasi & Otomasi
+
+| Integrasi | Fungsi | Catatan |
+|---|---|---|
+| **Midtrans (Snap)** | Pembayaran otomatis (QRIS, e-wallet, Virtual Account sesuai konfigurasi) | Butuh `SERVER/CLIENT KEY`, `APP_URL`/webhook publik; notifikasi diverifikasi signature |
+| **Fonnte (WhatsApp)** | Pengiriman notifikasi/pesan (sesuai konfigurasi & alur) | Butuh token API |
+| **Telegram Bot/Webhook** | Notifikasi & aksi verifikasi/pembatalan via callback (sesuai alur) | Butuh bot token, chat id, webhook & (opsional) secret token |
+| **Google Gemini** | Chatbot bantuan & TTS suara Teduh Bot | Butuh API key & model; ada rate limit khusus endpoint TTS |
+| **QR Code** | E-ticket check-in | Menggunakan library QR code |
+
+**Automasi terjadwal (scheduler):** kedaluwarsa reservasi pending, pruning activity & log, pembersihan token Sanctum expired, dan pembersihan cache.
+
+---
+
+## ⚙️ Operasional, Keandalan & Performa
+
+- **Cache & optimasi produksi**: dukungan `config:cache`, `route:cache`, `view:cache`, autoloader teroptimasi.
+- **Pembersihan rutin**: prune log/activity/token/cache untuk mencegah data menumpuk.
+- **Scheduler & queue**: memisahkan tugas berkala dan (opsional) pekerjaan antrian.
+- **Mode maintenance**: memungkinkan admin menutup akses publik sementara tanpa kehilangan kendali operasional.
+- **PWA-ready**: meningkatkan pengalaman akses di perangkat mobile.
+- **Dokumentasi pengujian**: tersedia skenario black-box & concurrency di folder `docs/`.
 
 ---
 
@@ -80,6 +274,7 @@ Aplikasi web terintegrasi untuk reservasi glamping/tiket masuk, verifikasi pemba
 | Frontend | Blade, Tailwind CSS 4, Vite 8, Alpine.js |
 | Database | SQLite / MySQL / PostgreSQL |
 | Queue/Cache/Session | Database driver (default, dapat disesuaikan) |
+| QR & Integrasi | chillerlan/php-qrcode, Midtrans, Fonnte, Telegram, Gemini |
 | Testing | PHPUnit 12 |
 
 ---
@@ -87,11 +282,11 @@ Aplikasi web terintegrasi untuk reservasi glamping/tiket masuk, verifikasi pemba
 ## 📦 Prasyarat
 
 **Lokal / Server:**
-- PHP **8.3+** dengan ekstensi: `bcmath`, `ctype`, `curl`, `dom`, `fileinfo`, `json`, `mbstring`, `openssl`, `pdo`, `tokenizer`, `xml`, `zip` (dan driver DB: `pdo_mysql` / `pdo_pgsql` / `pdo_sqlite`)
+- PHP **8.3+** dengan ekstensi: `bcmath`, `ctype`, `curl`, `dom`, `fileinfo`, `json`, `mbstring`, `openssl`, `pdo`, `tokenizer`, `xml`, `zip` (+ driver DB: `pdo_mysql` / `pdo_pgsql` / `pdo_sqlite`)
 - Composer 2
 - Node.js & npm (untuk build aset; tidak wajib di server produksi jika upload hasil build)
-- Web server: Nginx / Apache dengan `mod_rewrite`
-- Database: MySQL/MariaDB atau PostgreSQL (direkomendasikan untuk produksi), SQLite untuk dev
+- Web server Nginx/Apache (`mod_rewrite` untuk Apache)
+- Database MySQL/MariaDB atau PostgreSQL (disarankan produksi), SQLite untuk dev
 
 ---
 
@@ -105,7 +300,7 @@ cd Sireduh
 composer run setup
 ```
 
-`composer run setup` akan: install dependency Composer & npm, menyalin `.env`, generate app key, migrasi database, dan build aset frontend.
+`composer run setup`: install dependency Composer & npm, salin `.env`, generate app key, migrasi database, dan build aset frontend.
 
 ### Setup manual
 
@@ -142,16 +337,16 @@ npm run dev
 |---|---|
 | `APP_NAME` | Nama aplikasi (contoh: `SIRESTEDUH`) |
 | `APP_ENV` | `local` (dev) / `production` (hosting) |
-| `APP_KEY` | Kunci enkripsi (generate: `php artisan key:generate`) |
+| `APP_KEY` | Kunci enkripsi (`php artisan key:generate`) |
 | `APP_DEBUG` | `true` (dev) / **`false`** (production) |
 | `APP_URL` | URL publik, contoh `https://domainanda.com` |
 | `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` | Koneksi database |
-| `SESSION_DRIVER`, `CACHE_STORE`, `QUEUE_CONNECTION` | Default `database` (pastikan tabel migrasi tersedia) |
-| `PAYMENT_BANK`, `PAYMENT_ACCOUNT_NUMBER`, `PAYMENT_ACCOUNT_NAME`, `PAYMENT_WHATSAPP` | Info transfer manual |
-| `MIDTRANS_*` | Integrasi Midtrans (server/client key, mode production, metode aktif) |
+| `SESSION_DRIVER`, `CACHE_STORE`, `QUEUE_CONNECTION` | Default `database` (pastikan migrasi dijalankan) |
+| `PAYMENT_BANK`, `PAYMENT_ACCOUNT_NUMBER`, `PAYMENT_ACCOUNT_NAME`, `PAYMENT_WHATSAPP` | Informasi transfer manual |
+| `MIDTRANS_ENABLED`, `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, `MIDTRANS_IS_PRODUCTION`, `MIDTRANS_ENABLED_PAYMENTS` | Integrasi Midtrans |
 | `FONNTE_API_TOKEN`, `FONNTE_API_URL` | Notifikasi WhatsApp (Fonnte) |
-| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET` | Notifikasi/bot Telegram |
-| `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_TTS_*` | Chatbot AI & TTS (Teduh Bot) |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET` | Notifikasi/bot Telegram & proteksi webhook |
+| `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_BASE_URL`, `GEMINI_TTS_*` | Chatbot AI & TTS (Teduh Bot) |
 | `MAIL_*` | Konfigurasi email (jika digunakan) |
 
 Lihat [`.env.example`](.env.example) untuk daftar lengkap.
@@ -186,7 +381,7 @@ Dokumen pengujian tambahan:
 
 ### 2. Siapkan Paket Deploy (Disarankan)
 
-Script ini menyiapkan paket siap upload (install dependency production, build aset, bersihkan cache, dan buat `.zip` berisi `vendor` + `public/build`):
+Script menyiapkan paket siap upload (install dependency production, build aset, bersihkan cache, dan buat `.zip` berisi `vendor` + `public/build`):
 
 ```bash
 bash scripts/prepare-deploy.sh
@@ -215,10 +410,10 @@ php artisan optimize:clear
 Cocok untuk hosting yang menyediakan PHP & MySQL (tanpa akses root penuh).
 
 #### A1. Persiapan di cPanel
-1. **PHP Version**: pilih PHP **8.3+** (Menu: *Select PHP Version* / *MultiPHP Manager*).
+1. **PHP Version**: pilih PHP **8.3+** (*Select PHP Version* / *MultiPHP Manager*).
 2. **Aktifkan ekstensi**: `bcmath`, `ctype`, `curl`, `dom`, `fileinfo`, `mbstring`, `openssl`, `pdo_mysql` (atau driver DB lain), `tokenizer`, `xml`, `zip`.
 3. **Buat Database**: *MySQL Database Wizard* → buat database, user, password, lalu beri **ALL PRIVILEGES**.
-4. (Opsional) Pastikan fungsi PHP yang dibutuhkan tidak diblokir (`proc_open`, `proc_close`, dll. jika diperlukan oleh package tertentu).
+4. (Opsional) Pastikan fungsi PHP yang dibutuhkan tidak diblokir oleh hosting.
 
 #### A2. Upload & Extract
 1. Buat paket deploy (`bash scripts/prepare-deploy.sh`) di komputer lokal.
@@ -229,20 +424,19 @@ Cocok untuk hosting yang menyediakan PHP & MySQL (tanpa akses root penuh).
 #### A3. Atur Document Root ke folder `public` (PENTING)
 Web root **harus** mengarah ke folder `public/` Laravel, bukan root project.
 
-- **Jika domain utama**: di banyak cPanel tidak bisa ganti root `public_html` langsung. Solusi:
-  1. Pindahkan/ekstrak project ke `/home/username/siresteduh`.
-  2. Kosongkan/backup isi `public_html`, lalu salin isi `/home/username/siresteduh/public/*` ke `public_html/`.
-  3. Edit `public_html/index.php` ubah path agar menunjuk ke project:
+- **Jika domain utama** (root `public_html` tidak bisa diubah langsung):
+  1. Ekstrak project ke `/home/username/siresteduh`.
+  2. Salin isi `/home/username/siresteduh/public/*` ke `public_html/`.
+  3. Edit `public_html/index.php` agar path menunjuk ke project:
      ```php
-     // ubah dua baris berikut menyesuaikan lokasi project:
      require __DIR__.'/../siresteduh/vendor/autoload.php';
      $app = require_once __DIR__.'/../siresteduh/bootstrap/app.php';
      ```
-  4. Buat symlink `storage` dari `public_html/storage` ke `../siresteduh/storage/app/public` (lihat A6) atau sesuaikan penanganan file publik.
-- **Jika addon/subdomain**: di *Domains* / *Addon Domains* / *Subdomains*, set **Document Root** ke `/home/username/siresteduh/public` (cara paling bersih & disarankan).
+  4. Pastikan symlink/akses `storage` publik sesuai kebutuhan (lihat A6).
+- **Jika addon/subdomain** (disarankan): set **Document Root** ke `/home/username/siresteduh/public`.
 
 #### A4. Konfigurasi `.env`
-1. Di folder project (`/home/username/siresteduh`), salin `.env.example` menjadi `.env`.
+1. Salin `.env.example` menjadi `.env` di folder project.
 2. Edit `.env`:
    ```env
    APP_NAME="SIRESTEDUH"
@@ -264,30 +458,26 @@ Web root **harus** mengarah ke folder `public/` Laravel, bukan root project.
 3. Isi konfigurasi pembayaran/integrasi (`PAYMENT_*`, `MIDTRANS_*`, dll.) sesuai kebutuhan.
 
 #### A5. Jalankan Perintah Artisan
-Masuk ke **Terminal** cPanel (atau SSH jika tersedia), lalu `cd` ke folder project:
+Melalui **Terminal/SSH** cPanel (`cd` ke folder project):
 ```bash
-cd ~/siresteduh
-
-php artisan key:generate --force   # jika APP_KEY masih kosong
-php artisan migrate --force        # buat tabel di database produksi
-php artisan storage:link           # symlink public/storage -> storage/app/public
+php artisan key:generate --force   # jika APP_KEY kosong
+php artisan migrate --force
+php artisan storage:link
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 ```
-Jika hosting tidak menyediakan akses terminal/SSH: jalankan migrasi & setup dari lokal yang terhubung ke DB hosting (sementara whitelist IP), atau gunakan fitur *phpMyAdmin* untuk import skema (tidak disarankan) — **akses terminal sangat dianjurkan**.
+> Jika tidak ada akses terminal, proses migrasi/setup akan lebih sulit; akses terminal/SSH sangat dianjurkan.
 
 #### A6. Permission Folder
-Pastikan writable oleh web server:
 ```bash
 chmod -R 775 storage bootstrap/cache
 ```
-Di cPanel/File Manager: set permission folder `storage/` dan `bootstrap/cache/` ke `775` (rekursif).
+Pastikan folder `storage/` dan `bootstrap/cache/` writable oleh web server.
 
 #### A7. SSL (HTTPS)
-- Aktifkan SSL via *AutoSSL / Let's Encrypt* di cPanel.
+- Aktifkan SSL (AutoSSL/Let's Encrypt) di cPanel.
 - Pastikan `APP_URL` memakai `https://`.
-- Jika di belakang proxy dan terjadi mixed/redirect issue, pastikan proxy headers dipercaya (Laravel umumnya sudah menangani; cek konfigurasi hosting).
 
 ---
 
@@ -300,7 +490,7 @@ sudo apt install -y nginx mysql-server unzip git curl \
   php8.3 php8.3-fpm php8.3-cli php8.3-mbstring php8.3-xml php8.3-curl \
   php8.3-zip php8.3-bcmath php8.3-mysql php8.3-sqlite3
 ```
-> Sesuaikan versi PHP (8.3+). Install Composer: https://getcomposer.org/download/ dan Node.js (jika build di server).
+> Sesuaikan versi PHP (8.3+). Install Composer & Node.js (jika build di server).
 
 #### B2. Siapkan Database
 ```bash
@@ -316,30 +506,25 @@ sudo git clone https://github.com/shollahudien/Sireduh.git siresteduh
 cd siresteduh
 
 cp .env.example .env
-# edit .env (APP_ENV, APP_DEBUG, APP_URL, DB_*, integrasi, dll)
-nano .env
+nano .env   # set APP_ENV=production, APP_DEBUG=false, APP_URL, DB_*, integrasi
 
 composer install --no-dev --optimize-autoloader
 php artisan key:generate --force
 php artisan migrate --force
 php artisan storage:link
 
-# build aset (butuh Node.js & npm di server)
-npm ci && npm run build
+npm ci && npm run build   # jika build di server
 
-# permission
 sudo chown -R www-data:www-data storage bootstrap/cache
 sudo chmod -R 775 storage bootstrap/cache
 
-# cache optimasi
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 ```
-> Alternatif: build & `composer install` di lokal/CI lalu upload hasilnya (termasuk `vendor/` & `public/build/`) ke server.
 
 #### B4. Konfigurasi Nginx
-Buat file `/etc/nginx/sites-available/siresteduh`:
+`/etc/nginx/sites-available/siresteduh`:
 ```nginx
 server {
     listen 80;
@@ -385,13 +570,12 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d domainanda.com -d www.domainanda.com
 ```
-Pastikan `APP_URL=https://domainanda.com`.
 
 ---
 
 ### Opsi C — VPS dengan Apache
 
-1. Set **DocumentRoot** ke `/var/www/siresteduh/public` dan aktifkan `mod_rewrite`:
+1. Aktifkan rewrite dan arahkan **DocumentRoot** ke `/var/www/siresteduh/public`:
    ```bash
    sudo a2enmod rewrite
    ```
@@ -405,38 +589,30 @@ Pastikan `APP_URL=https://domainanda.com`.
            AllowOverride All
            Require all granted
        </Directory>
-
-       ErrorLog ${APACHE_LOG_DIR}/siresteduh_error.log
-       CustomLog ${APACHE_LOG_DIR}/siresteduh_access.log combined
    </VirtualHost>
    ```
-3. Laravel sudah menyertakan `public/.htaccess`. Reload: `sudo a2ensite siresteduh && sudo systemctl reload apache2`.
-4. Gunakan Certbot untuk HTTPS: `sudo certbot --apache -d domainanda.com`.
+3. Reload: `sudo a2ensite siresteduh && sudo systemctl reload apache2`
+4. HTTPS: `sudo certbot --apache -d domainanda.com`
 
 ---
 
 ### 3. Scheduler (Cron) & Queue Worker (Wajib untuk Fitur Tertentu)
 
-Aplikasi memiliki tugas terjadwal (lihat `bootstrap/app.php`), antara lain:
-- `reservations:expire-pending` (setiap menit) — melepas stok reservasi pending yang kedaluwarsa.
-- `activity:prune`, `logs:prune` (harian) — pembersihan log/activity.
-- `sanctum:prune-expired`, `cache:prune-expired`, `cache:clear` (harian/berkala).
+Tugas terjadwal aplikasi (ringkasan): `reservations:expire-pending` (tiap menit), pruning activity/log, `sanctum:prune-expired`, pembersihan cache (harian/berkala).
 
 #### Cron Scheduler
-**VPS (crontab user web, mis. `www-data` atau user deploy):**
+**VPS:**
 ```bash
 * * * * * cd /var/www/siresteduh && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-**cPanel:** *Cron Jobs* → tambahkan perintah (sesuaikan path PHP & project):
+**cPanel (Cron Jobs):**
 ```bash
 * * * * * /usr/local/bin/php /home/username/siresteduh/artisan schedule:run >> /dev/null 2>&1
 ```
 
 #### Queue Worker
-Default `QUEUE_CONNECTION=database`. Jika ada job yang diantrikan (notifikasi, dll.), jalankan worker:
-
-**VPS (systemd, contoh `/etc/systemd/system/siresteduh-queue.service`):**
+Default `QUEUE_CONNECTION=database`. Jika memakai job antrian, jalankan worker (VPS/systemd contoh):
 ```ini
 [Unit]
 Description=SIRESTEDUH Queue Worker
@@ -454,38 +630,24 @@ WantedBy=multi-user.target
 ```bash
 sudo systemctl enable --now siresteduh-queue
 ```
-
-**Shared hosting:** jika tidak bisa proses long-running, gunakan cron untuk memproses antrian secara berkala (kurang ideal) atau set `QUEUE_CONNECTION=sync` (job berjalan sinkron, bisa memperlambat request).
+> Shared hosting tanpa proses long-running: pertimbangkan `QUEUE_CONNECTION=sync` atau mekanisme cron/worker yang didukung hosting.
 
 ---
 
 ### 4. Konfigurasi Webhook & URL Publik
 
-Setelah domain aktif & HTTPS terpasang, daftarkan endpoint berikut ke layanan terkait:
-
 | Layanan | Endpoint | Catatan |
 |---|---|---|
-| Midtrans (notification) | `POST https://domainanda.com/api/payments/midtrans/notification` | Set di dashboard Midtrans; isi `MIDTRANS_SERVER_KEY`, `MIDTRANS_CLIENT_KEY`, `MIDTRANS_IS_PRODUCTION` |
-| Telegram (webhook bot) | `POST https://domainanda.com/api/telegram/webhook` | Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET` |
+| Midtrans Notification | `POST https://domainanda.com/api/payments/midtrans/notification` | Set di dashboard Midtrans; isi `MIDTRANS_*` |
+| Telegram Webhook | `POST https://domainanda.com/api/telegram/webhook` | Set `TELEGRAM_*` (termasuk secret jika dipakai) |
 
-Pastikan `APP_URL` sesuai domain produksi agar URL yang dihasilkan aplikasi benar.
+Pastikan `APP_URL` sesuai domain produksi.
 
 ---
 
 ### 5. Update / Deploy Ulang
 
-**Shared hosting (paket zip):**
-1. Build paket baru: `bash scripts/prepare-deploy.sh`
-2. Aktifkan maintenance (opsional): `php artisan down --secret="token-rahasia"`
-3. Backup `.env` dan folder `storage/` (terutama `storage/app/public` berisi upload).
-4. Upload & extract paket baru (timpa file kode; **jangan timpa `.env` & data upload**).
-5. Jalankan:
-   ```bash
-   php artisan migrate --force
-   php artisan storage:link
-   php artisan config:cache && php artisan route:cache && php artisan view:cache
-   ```
-6. `php artisan up`
+**Shared hosting (zip):** build paket baru → (opsional `php artisan down`) → backup `.env` & `storage/app/public` → upload/extract (jangan timpa `.env`/data upload) → `migrate --force`, `storage:link`, cache ulang → `php artisan up`.
 
 **VPS (git):**
 ```bash
@@ -499,7 +661,7 @@ php artisan optimize:clear
 php artisan config:cache && php artisan route:cache && php artisan view:cache
 sudo chown -R www-data:www-data storage bootstrap/cache
 php artisan up
-php artisan queue:restart  # jika memakai queue worker
+php artisan queue:restart  # jika memakai queue
 ```
 
 ---
@@ -508,16 +670,15 @@ php artisan queue:restart  # jika memakai queue worker
 
 | Gejala | Penyebab umum | Solusi |
 |---|---|---|
-| 500 Internal Server Error | Permission, `.env`/`APP_KEY`, ekstensi PHP kurang, cache rusak | Cek `storage/logs/laravel.log`; pastikan `storage` & `bootstrap/cache` writable; jalankan `php artisan key:generate --force` & `php artisan optimize:clear`; pastikan ekstensi PHP aktif |
-| Halaman blank / aset (CSS/JS) tidak termuat | `public/build` belum ada, `APP_URL` salah, document root bukan ke `public/` | Jalankan `npm run build`; set `APP_URL` dengan benar; arahkan web root ke `public/` |
-| 404 pada semua route kecuali `/` | Rewrite tidak aktif | Nginx: pastikan `try_files ... /index.php?$query_string`; Apache: aktifkan `mod_rewrite` & `AllowOverride All` |
-| Error "storage link" / gambar/upload tidak muncul | Symlink belum dibuat | Jalankan `php artisan storage:link`; pastikan path & permission benar |
-| Upload bukti pembayaran gagal (413/limit) | Batas upload server kecil | Naikkan `upload_max_filesize` & `post_max_size` (php.ini) dan `client_max_body_size` (Nginx) |
-| Reservasi pending tidak pernah kedaluwarsa, log menumpuk | Scheduler tidak berjalan | Pastikan cron `schedule:run` aktif tiap menit |
-| Notifikasi/job tidak terkirim | Queue worker tidak jalan / koneksi queue salah | Jalankan `queue:work`, cek `QUEUE_CONNECTION`, atau gunakan `sync` bila perlu |
-| Session/login tidak stabil | `APP_URL`/domain/cookie mismatch, tabel session belum ada | Samakan domain `APP_URL`, pastikan migrasi tabel `sessions` sudah jalan (`SESSION_DRIVER=database`) |
+| 500 Internal Server Error | Permission, `.env`/`APP_KEY`, ekstensi PHP kurang, cache rusak | Cek `storage/logs/laravel.log`; set permission `storage` & `bootstrap/cache`; `php artisan key:generate --force` & `php artisan optimize:clear`; pastikan ekstensi aktif |
+| Aset CSS/JS tidak termuat | `public/build` belum ada, `APP_URL` salah, document root keliru | `npm run build`; perbaiki `APP_URL`; arahkan web root ke `public/` |
+| 404 semua route (kecuali `/`) | Rewrite tidak aktif | Nginx `try_files ... /index.php?$query_string`; Apache `mod_rewrite` & `AllowOverride All` |
+| Upload/gambar tidak muncul | Symlink storage belum ada | `php artisan storage:link`; cek permission/path |
+| Upload bukti gagal (413/limit) | Batas upload server kecil | Naikkan `upload_max_filesize`, `post_max_size` (PHP) dan `client_max_body_size` (Nginx) |
+| Reservasi pending tidak kedaluwarsa/log menumpuk | Scheduler tidak jalan | Pastikan cron `schedule:run` aktif tiap menit |
+| Job/notifikasi tertunda | Queue worker tidak aktif | Jalankan `queue:work` atau gunakan `QUEUE_CONNECTION=sync` bila sesuai |
 
-**Perintah diagnostik berguna:**
+**Diagnostik:**
 ```bash
 php artisan about
 php artisan config:clear && php artisan cache:clear && php artisan route:clear && php artisan view:clear
@@ -531,28 +692,30 @@ tail -n 200 storage/logs/laravel.log
 ```text
 app/
   Http/Controllers/        # Web & API (Admin, POS, Check-in, Public, Telegram, Midtrans)
+  Http/Middleware/         # Role, maintenance, activity logging
   Models/                  # Eloquent models (Reservation, Payment, Unit, Product, dll.)
-  Services/                # Business logic (Availability, Midtrans, Telegram, Chatbot, dll.)
+  Services/                # Business logic (Availability, Midtrans, Telegram, Chatbot, Audit, dll.)
 resources/views/           # Blade views (public, admin, pos, checkin, layouts, components)
 routes/
   web.php                  # Rute web
   api.php                  # Rute API & webhook
 database/migrations/       # Skema database
 scripts/                   # Script bantu (mis. prepare-deploy.sh)
-deploy/                    # Artefak paket deploy (lokal/arsip)
+docs/                      # Dokumen pengujian
 ```
 
-> **Catatan:** `Dockerfile` dan `compose*.yaml` di root saat ini merupakan placeholder (bukan konfigurasi Laravel) — gunakan panduan deploy di atas atau sesuaikan sendiri untuk containerisasi Laravel.
+> **Catatan:** `Dockerfile` dan `compose*.yaml` di root saat ini merupakan placeholder (bukan konfigurasi Laravel siap pakai) — gunakan panduan deploy di atas atau sesuaikan untuk containerisasi Laravel.
 
 ---
 
-## 🔒 Catatan Keamanan
+## 🛡️ Catatan Keamanan Operasional
 
 - Jangan commit `.env`, kredensial API, token, cookie/session dump, atau data pribadi.
-- Selalu `APP_DEBUG=false` di produksi.
-- Batasi akses ke panel admin & gunakan HTTPS.
-- Lindungi endpoint webhook (Midtrans/Telegram) dengan secret/token yang sesuai konfigurasi.
-- Backup database & folder `storage/app/public` secara berkala.
+- Selalu gunakan `APP_DEBUG=false` di produksi dan HTTPS.
+- Batasi akses akun **admin**; gunakan kredensial kuat dan prinsip least privilege.
+- Lindungi endpoint webhook (signature Midtrans, secret Telegram) dan pantau log notifikasi.
+- Backup berkala database & `storage/app/public` (upload bukti/gambar).
+- Perbarui dependensi & PHP secara berkala untuk patch keamanan.
 
 ---
 
