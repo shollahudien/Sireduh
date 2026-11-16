@@ -699,6 +699,7 @@ Dokumentasi analisis & perancangan sistem tersedia di folder [`docs/`](docs/):
 | [DFD](docs/DFD.md) | Data Flow Diagram Level 0 (Konteks), Level 1, dan Level 2 proses utama |
 | [Flowchart](docs/FLOWCHART.md) | Alur proses reservasi, pembayaran (manual/Midtrans), verifikasi admin, check-in, POS, dan maintenance |
 | [ERD](docs/ERD.md) | Entity Relationship Diagram (entitas, atribut kunci, relasi/kardinalitas) |
+| [UAT](docs/UAT.md) | Dokumen User Acceptance Testing (97 skenario: pertanyaan uji, jawaban/hasil diharapkan, data uji, & sign-off) |
 
 > Diagram dibuat menggunakan **Mermaid** sehingga dapat langsung dirender di GitHub.
 
