@@ -73,7 +73,7 @@ class PaymentPageTest extends TestCase
         $reservation = $this->seedPendingReservation();
 
         $response = $this->post('/api/payments/upload', [
-            'reservation_id' => $reservation->id,
+            'order_code' => $reservation->order_code,
             'proof_image' => UploadedFile::fake()->image('bukti.png'),
         ]);
 

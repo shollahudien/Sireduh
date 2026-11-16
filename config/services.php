@@ -42,9 +42,23 @@ return [
         'whatsapp' => env('PAYMENT_WHATSAPP', '081234567890'),
     ],
 
+    'midtrans' => [
+        'enabled' => env('MIDTRANS_ENABLED', true),
+        'server_key' => env('MIDTRANS_SERVER_KEY'),
+        'client_key' => env('MIDTRANS_CLIENT_KEY'),
+        'is_production' => env('MIDTRANS_IS_PRODUCTION', false),
+        'enabled_payments' => array_filter(array_map('trim', explode(',', (string) env('MIDTRANS_ENABLED_PAYMENTS', 'qris,gopay,shopeepay,other_qris,bca_va,bni_va,bri_va,permata_va')))),
+    ],
+
     'fonnte' => [
         'token' => env('FONNTE_API_TOKEN'),
         'api_url' => env('FONNTE_API_URL', 'https://api.fonnte.com/send'),
+    ],
+
+    'telegram' => [
+        'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+        'chat_id' => env('TELEGRAM_CHAT_ID'),
+        'webhook_secret' => env('TELEGRAM_WEBHOOK_SECRET'),
     ],
 
     'gemini' => [

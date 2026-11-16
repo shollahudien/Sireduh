@@ -37,7 +37,8 @@ class CheckinTicketTest extends TestCase
     {
         $user = $this->checkin();
 
-        $response = $this->post('/login', [
+        $response = $this->withSession(['_token' => 'test-token'])->post('/login', [
+            '_token' => 'test-token',
             'email' => $user->email,
             'password' => 'secret',
         ]);
@@ -78,25 +79,21 @@ class CheckinTicketTest extends TestCase
 
         $unit = Unit::create(['name' => 'Tenda', 'type' => 'alat_wisata', 'price' => 50000, 'capacity' => 4, 'stock' => 1]);
 
-        // non-ticket product rejected
         $this->actingAs($checkin)->postJson('/api/pos/checkout', [
             'payment_method' => 'cash',
             'items' => [['product_id' => $food->id, 'quantity' => 1]],
         ])->assertStatus(422);
 
-        // unit rental rejected
         $this->actingAs($checkin)->postJson('/api/pos/checkout', [
             'payment_method' => 'cash',
             'items' => [['unit_id' => $unit->id, 'quantity' => 1]],
         ])->assertStatus(422);
 
-        // transfer payment rejected
         $this->actingAs($checkin)->postJson('/api/pos/checkout', [
             'payment_method' => 'transfer',
             'items' => [['product_id' => Product::where('category', 'tiket_masuk')->value('id'), 'quantity' => 1]],
         ])->assertStatus(422);
 
-        // cash & qris accepted
         foreach (['cash', 'qris'] as $method) {
             $this->actingAs($checkin)->postJson('/api/pos/checkout', [
                 'payment_method' => $method,

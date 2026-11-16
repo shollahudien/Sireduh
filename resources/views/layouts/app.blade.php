@@ -4,11 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="theme-color" content="#15803d">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <title>@yield('title', 'SIRESTEDUH') &mdash; BUMDes Wisata Teduh</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="bg-gray-50 text-gray-800 antialiased" data-layout="public">
+<body class="bg-gray-50 text-gray-800 antialiased" data-layout="public" x-data="{ open: false, scrolled: false }">
 
 {{-- Navbar publik — sticky, animasi halus, responsif HP/tablet/laptop --}}
 @php
@@ -21,14 +24,13 @@
         $navLink('Status Pesanan', url('/status'), 'status'),
     ];
 @endphp
-<nav x-data="{ open: false, scrolled: false }"
-     @scroll.window="scrolled = window.scrollY > 10"
+<nav @scroll.window="scrolled = window.scrollY > 10"
      @keydown.escape.window="open = false"
      class="sticky top-0 z-40 text-white transition-all duration-300"
      :class="scrolled ? 'shadow-xl shadow-green-950/30' : 'shadow-md'">
 
     {{-- Garis aksen gradasi bergerak --}}
-    <div class="navbar-shimmer h-[3px] bg-gradient-to-r from-lime-400 via-emerald-300 to-teal-400 from-20% via-50% to-80%"></div>
+    <div class="navbar-shimmer h-0.75 bg-linear-to-r from-lime-400 via-emerald-300 to-teal-400 from-20% via-50% to-80%"></div>
 
     <div class="transition-all duration-300"
          :class="scrolled ? 'bg-green-900/85 backdrop-blur-md' : 'bg-green-800'">
@@ -55,9 +57,9 @@
                 @endforeach
             </div>
 
-            {{-- Tombol hamburger (HP & tablet kecil) --}}
+            {{-- Tombol hamburger disembunyikan: navigasi HP/tablet lewat bottom nav --}}
             <button type="button" @click="open = !open" :aria-expanded="open" aria-label="Buka menu"
-                    class="md:hidden relative w-11 h-11 rounded-xl bg-white/10 ring-1 ring-white/20 flex flex-col items-center justify-center gap-1.5 active:scale-90 transition-transform duration-200 focus-visible:ring-2 focus-visible:ring-lime-300 focus-visible:outline-none">
+                    class="hidden md:hidden relative w-11 h-11 rounded-xl bg-white/10 ring-1 ring-white/20 flex flex-col items-center justify-center gap-1.5 active:scale-90 transition-transform duration-200 focus-visible:ring-2 focus-visible:ring-lime-300">
                 <span class="block w-5 h-0.5 bg-white rounded-full transition-all duration-300"
                       :class="open ? 'rotate-45 translate-y-[3.5px]' : ''"></span>
                 <span class="block w-5 h-0.5 bg-white rounded-full transition-all duration-300"
@@ -105,72 +107,56 @@
     </div>
 @endif
 
-<main class="max-w-7xl mx-auto px-4 py-8">
+<main class="max-w-7xl mx-auto px-4 py-8 pb-24 md:pb-8">
     @yield('content')
 </main>
 
-{{-- Footer — navigasi sekunder + akses masuk/panel staf --}}
-<footer class="bg-green-900 text-green-200 mt-12 relative overflow-hidden">
-    <div class="navbar-shimmer h-[3px] bg-gradient-to-r from-lime-400 via-emerald-300 to-teal-400 opacity-70"></div>
-
-    <div class="max-w-7xl mx-auto px-4 py-10 grid gap-8 sm:grid-cols-3">
-        {{-- Brand --}}
-        <div>
-            <p class="flex items-center gap-2 text-lg font-extrabold text-white">
-                <span class="w-9 h-9 rounded-xl bg-lime-400/20 ring-1 ring-lime-300/40 flex items-center justify-center text-lg">🏕️</span>
-                SIRESTEDUH
-            </p>
-            <p class="text-sm text-green-300/80 mt-2 leading-relaxed">Sistem Informasi Reservasi Terpadu<br>BUMDes Wisata Teduh Glamping</p>
-        </div>
-
-        {{-- Menu publik --}}
-        <div>
-            <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-lime-300/90 mb-3">Jelajahi</p>
-            <ul class="space-y-2 text-sm">
-                <li><a href="{{ url('/') }}" class="inline-flex items-center gap-2 hover:text-white hover:translate-x-1 transition-all duration-200">🏠 Beranda</a></li>
-                <li><a href="{{ url('/checkout') }}" class="inline-flex items-center gap-2 hover:text-white hover:translate-x-1 transition-all duration-200">🎟️ Reservasi &amp; Tiket</a></li>
-                <li><a href="{{ url('/status') }}" class="inline-flex items-center gap-2 hover:text-white hover:translate-x-1 transition-all duration-200">📋 Status Pesanan</a></li>
-            </ul>
-        </div>
-
-        {{-- Akses staf: login / panel sesuai role --}}
-        <div>
-            <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-lime-300/90 mb-3">Untuk Staf</p>
-            @auth
-                <ul class="space-y-2 text-sm">
-                    @if (auth()->user()->role === 'admin')
-                        <li><a href="{{ route('admin.dashboard') }}" class="inline-flex items-center gap-2 hover:text-white hover:translate-x-1 transition-all duration-200">🛠️ Dashboard Admin</a></li>
-                    @elseif (auth()->user()->role === 'kasir')
-                        <li><a href="{{ route('pos.officer.index') }}" class="inline-flex items-center gap-2 hover:text-white hover:translate-x-1 transition-all duration-200">🧾 POS Kasir</a></li>
-                    @elseif (auth()->user()->role === 'kasir_makanan')
-                        <li><a href="{{ route('kasir.makanan.index') }}" class="inline-flex items-center gap-2 hover:text-white hover:translate-x-1 transition-all duration-200">🍜 Kasir Makanan</a></li>
-                    @elseif (auth()->user()->role === 'checkin')
-                        <li><a href="{{ route('checkin.officer.index') }}" class="inline-flex items-center gap-2 hover:text-white hover:translate-x-1 transition-all duration-200">🎫 Check-In</a></li>
-                    @endif
-                    <li>
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-                            <button type="submit" class="inline-flex items-center gap-2 text-green-300 hover:text-red-300 hover:translate-x-1 transition-all duration-200">🚪 Keluar</button>
-                        </form>
-                    </li>
-                </ul>
-            @else
-                <a href="{{ route('login') }}"
-                   class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-lime-400 text-green-950 text-sm font-bold shadow-lg shadow-lime-400/20 hover:bg-lime-300 hover:shadow-lime-300/40 hover:scale-105 active:scale-95 transition-all duration-300">
-                    🔐 Masuk
-                </a>
-                <p class="text-xs text-green-300/70 mt-2">Untuk petugas &amp; admin</p>
-            @endauth
-        </div>
+{{-- Bottom nav (HP & tablet) — gaya Android bottom navigation --}}
+<nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-green-900/95 backdrop-blur-md border-t border-white/10 shadow-2xl"
+     style="padding-bottom: env(safe-area-inset-bottom);">
+    <div class="grid grid-cols-4 h-16">
+        @php
+            $bnItems = [
+                ['label'=>'Beranda','href'=>url('/'),'icon'=>'🏠','active'=>request()->is('/')],
+                ['label'=>'Reservasi','href'=>url('/checkout'),'icon'=>'🎟️','active'=>request()->is('checkout*')],
+                ['label'=>'Status','href'=>url('/status'),'icon'=>'📋','active'=>request()->is('status*')],
+            ];
+        @endphp
+        @foreach ($bnItems as $it)
+            <a href="{{ $it['href'] }}"
+               class="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-all duration-200 active:scale-90 {{ $it['active'] ? 'text-lime-300' : 'text-green-100 hover:text-white' }}">
+                <span class="text-xl leading-none">{{ $it['icon'] }}</span>
+                <span>{{ $it['label'] }}</span>
+            </a>
+        @endforeach
+        <button type="button" @click="open = !open"
+                class="flex flex-col items-center justify-center gap-0.5 text-[10px] font-semibold text-green-100 hover:text-white transition-all duration-200 active:scale-90">
+            <span class="text-xl leading-none" x-text="open ? '✕' : '☰'">☰</span>
+            <span>Menu</span>
+        </button>
     </div>
+</nav>
+
+{{-- Footer — navigasi sekunder + akses masuk/panel staf (selalu tampil; ruang bawah untuk bottom nav HP) --}}
+<footer class="bg-green-900 text-green-200 mt-12 relative overflow-hidden pb-24 md:pb-0">
+    <div class="navbar-shimmer h-0.75 bg-linear-to-r from-lime-400 via-emerald-300 to-teal-400 opacity-70"></div>
+
 
     <div class="border-t border-white/10">
         <p class="max-w-7xl mx-auto px-4 py-4 text-center text-xs text-green-300/70">
-            &copy; {{ date('Y') }} BUMDes Wisata Teduh Glamping &mdash; SIRESTEDUH
+            &copy; {{ date('Y') }} Teduh Glamping &mdash; SIRESTEDUH
         </p>
     </div>
 </footer>
 
 @include('components.chatbot')
+
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+}
+</script>
 </body>
 </html>

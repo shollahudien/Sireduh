@@ -32,7 +32,13 @@ class Product extends Model
             'for_kasir_makanan' => 'boolean',
             'type' => 'string',
             'category' => 'string',
+            'is_low_stock' => 'boolean',
         ];
+    }
+
+    public function getIsLowStockAttribute(): bool
+    {
+        return $this->stock <= 5;
     }
 
     public function addons(): HasMany

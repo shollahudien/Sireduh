@@ -25,7 +25,6 @@
         <h1>SIRESTEDUH Sedang dalam Perbaikan</h1>
         <p>{{ $message }}</p>
         <span class="badge">Maintenance Mode</span>
-        <a href="/login" class="footer" style="display:inline-block;margin-top:1.5rem;font-size:.75rem;color:#6b7280;text-decoration:underline;">Masuk sebagai admin →</a>
         <div class="footer">&copy; {{ date('Y') }} BUMDes Wisata Teduh Glamping — SIRESTEDUH</div>
     </div>
 </body>

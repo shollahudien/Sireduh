@@ -18,15 +18,20 @@ class AdminNotificationController extends Controller
     {
         $latest = Payment::query()
             ->where('status', 'pending')
+            ->whereHas('reservation', fn ($q) => $q->whereIn('status', ['pending', 'waiting_verification']))
             ->with(['reservation', 'reservation.visitor', 'reservation.unit'])
             ->latest()
             ->take(5)
             ->get();
 
+        $countQuery = Payment::query()
+            ->where('status', 'pending')
+            ->whereHas('reservation', fn ($q) => $q->whereIn('status', ['pending', 'waiting_verification']));
+
         return response()->json([
-            'count' => Payment::query()->where('status', 'pending')->count(),
-            'total_pending' => Payment::query()->where('status', 'pending')->count(),
-            'has_more' => Payment::query()->where('status', 'pending')->count() > 5,
+            'count' => $countQuery->count(),
+            'total_pending' => $countQuery->count(),
+            'has_more' => $countQuery->count() > 5,
             'latest' => $latest->map(fn (Payment $payment): array => [
                 'id' => $payment->id,
                 'reservation_id' => $payment->reservation?->id,

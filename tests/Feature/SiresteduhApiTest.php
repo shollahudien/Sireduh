@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\GlampingPackage;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Reservation;
@@ -10,6 +11,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Models\Visitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class SiresteduhApiTest extends TestCase
@@ -21,6 +23,8 @@ class SiresteduhApiTest extends TestCase
     // ----------------------------------------------------------------
     public function test_modules_1_and_2_availability_and_checkout_locking(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-12-01 07:00:00', 'Asia/Jakarta'));
+
         $unit = Unit::create([
             'name' => 'Glamping Deluxe 1',
             'type' => 'glamping',
@@ -29,8 +33,17 @@ class SiresteduhApiTest extends TestCase
             'stock' => 1,
         ]);
 
+        $package = GlampingPackage::create([
+            'code' => 'glamp_test_6h',
+            'name' => 'Paket 6 Jam',
+            'duration_hours' => 6,
+            'price' => 200000.00,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+
         // Availability endpoint harus mengembalikan unit yang tersedia
-        $avail = $this->getJson('/api/availability?check_in=2026-12-01&check_out=2026-12-03&type=glamping');
+        $avail = $this->getJson('/api/availability?check_in=2026-12-10&package_id='.$package->code.'&type=glamping');
         $avail->assertStatus(200)
             ->assertJsonPath('data.0.id', $unit->id);
 
@@ -40,23 +53,25 @@ class SiresteduhApiTest extends TestCase
             'visitor_whatsapp' => '081234567890',
             'visitor_email' => 'budi@example.com',
             'unit_id' => $unit->id,
-            'check_in_date' => '2026-12-01',
-            'check_out_date' => '2026-12-03',
+            'package_id' => $package->code,
+            'check_in_date' => '2026-12-10',
             'total_price' => 700000.00,
         ]);
         $first->assertStatus(201)->assertJsonPath('success', true);
 
-        // Reservasi kedua untuk unit + tanggal yang sama harus ditolak (409)
+        // Reservasi kedua untuk unit + jadwal paket yang sama harus ditolak (409)
         $conflict = $this->postJson('/api/reservations', [
             'visitor_name' => 'Ani Wijaya',
             'visitor_whatsapp' => '089876543210',
             'visitor_email' => 'ani@example.com',
             'unit_id' => $unit->id,
-            'check_in_date' => '2026-12-01',
-            'check_out_date' => '2026-12-03',
+            'package_id' => $package->code,
+            'check_in_date' => '2026-12-10',
             'total_price' => 700000.00,
         ]);
         $conflict->assertStatus(409);
+
+        Carbon::setTestNow();
     }
 
     // ----------------------------------------------------------------

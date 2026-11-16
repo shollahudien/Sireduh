@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ActivityLog extends Model
 {
@@ -11,17 +12,26 @@ class ActivityLog extends Model
     public const UPDATED_AT = null;
 
     protected $fillable = [
-        'user_id', 'user_name', 'user_role', 'ip', 'method', 'path', 'route', 'status', 'user_agent',
+        'user_id', 'user_name', 'user_role', 'event', 'description',
+        'subject_type', 'subject_id', 'subject_label', 'request_id',
+        'ip', 'method', 'path', 'route', 'status', 'properties',
+        'file_name', 'file_mime', 'file_size', 'file_path', 'file_hash',
+        'user_agent',
     ];
 
     protected $casts = [
         'user_id' => 'integer',
+        'subject_id' => 'integer',
         'status' => 'integer',
+        'file_size' => 'integer',
+        'properties' => 'array',
     ];
 
-    /**
-     * Delete activity rows older than the given number of days.
-     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public static function pruneOlderThan(int $days): int
     {
         return static::query()
@@ -30,8 +40,6 @@ class ActivityLog extends Model
     }
 
     /**
-     * Retention options in days, shown in the admin UI.
-     *
      * @return array<int, int>
      */
     public static function retentionOptions(): array

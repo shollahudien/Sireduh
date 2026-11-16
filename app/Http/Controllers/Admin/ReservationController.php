@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Jobs\SendETicketJob;
 use App\Models\Reservation;
-use App\Models\Unit;
+use App\Services\ReservationCancellationService;
 
 class ReservationController extends Controller
 {
@@ -32,21 +32,23 @@ class ReservationController extends Controller
         $reservation->save();
 
         // Trigger WhatsApp E-Ticket queue job
-        SendETicketJob::dispatch($reservation->id);
+        SendETicketJob::dispatchSync($reservation->id);
 
         return back()->with('success', 'Reservasi diverifikasi dan E-ticket WhatsApp terkirim.');
     }
 
-    public function cancel(Reservation $reservation)
+    public function cancel(Reservation $reservation, ReservationCancellationService $cancellations)
     {
-        $reservation->status = 'cancelled';
-        $reservation->save();
+        // Stok unit tidak dikembalikan ke kolom stock: ketersediaan unit dihitung
+        // dari reservasi aktif. Stok produk tambahan yang dipotong saat pesanan
+        // dibuat memang harus dikembalikan oleh service.
+        $cancelled = $cancellations->cancel($reservation);
 
-        // Return unit stock
-        if ($reservation->unit) {
-            $reservation->unit->increment('stock', 1);
-        }
-
-        return back()->with('success', 'Reservasi dibatalkan dan stok dikembalikan.');
+        return back()->with(
+            $cancelled ? 'success' : 'info',
+            $cancelled
+                ? 'Reservasi dibatalkan dan stok produk tambahan dikembalikan.'
+                : 'Reservasi tidak dapat dibatalkan pada status saat ini.',
+        );
     }
 }

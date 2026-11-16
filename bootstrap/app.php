@@ -48,7 +48,11 @@ return Application::configure(basePath: dirname(__DIR__))
         );
     })
     ->withSchedule(function (Schedule $schedule): void {
+        // Reservasi pending tanpa pembayaran tidak boleh menahan stok selamanya.
+        $schedule->command('reservations:expire-pending')->everyMinute();
         $schedule->command('activity:prune')->dailyAt('03:00');
         $schedule->command('logs:prune')->dailyAt('03:05');
         $schedule->command('sanctum:prune-expired --hours=24')->dailyAt('03:10');
+        $schedule->command('cache:prune-expired')->dailyAt('03:15');
+        $schedule->command('cache:clear')->cron('0 3 */3 * *');
     })->create();

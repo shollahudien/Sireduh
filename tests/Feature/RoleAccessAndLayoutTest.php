@@ -23,15 +23,15 @@ class RoleAccessAndLayoutTest extends TestCase
         $kasir = User::factory()->create(['role' => User::ROLE_KASIR]);
         $checkin = User::factory()->create(['role' => User::ROLE_CHECKIN]);
 
-        $this->post('/login', ['email' => $admin->email, 'password' => 'password'])
+        $this->withSession(['_token' => 'test-token'])->post('/login', ['_token' => 'test-token', 'email' => $admin->email, 'password' => 'password'])
             ->assertRedirect('/admin');
         $this->post('/logout');
 
-        $this->post('/login', ['email' => $kasir->email, 'password' => 'password'])
+        $this->withSession(['_token' => 'test-token'])->post('/login', ['_token' => 'test-token', 'email' => $kasir->email, 'password' => 'password'])
             ->assertRedirect('/pos');
         $this->post('/logout');
 
-        $this->post('/login', ['email' => $checkin->email, 'password' => 'password'])
+        $this->withSession(['_token' => 'test-token'])->post('/login', ['_token' => 'test-token', 'email' => $checkin->email, 'password' => 'password'])
             ->assertRedirect('/checkin');
     }
 

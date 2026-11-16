@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Product;
+use App\Models\Reservation;
 use App\Models\Unit;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -35,17 +36,43 @@ class ChatbotService
      */
     public const CONTEXT_CACHE_KEY = 'chatbot_business_context';
 
-    public function __construct(protected AvailabilityService $availability) {}
+    public function __construct(protected AvailabilityService $availability, protected ChatbotMessageService $messages) {}
 
-    public function ask(string $question): string
+    /**
+     * @param  array<int, array{role: string, text: string}>  $history
+     *                                                                  Riwayat percakapan widget (user/bot, maks 10).
+     *                                                                  Kirim ke Gemini sebagai multi-turn agar jawaban
+     *                                                                  kontekstual ("yang kedua berapa?"); fallback FAQ
+     *                                                                  tetap stateless dari data DB.
+     */
+    public function ask(string $question, array $history = [], ?string $userName = null, ?string $sessionId = null): string
     {
         $question = trim(strip_tags($question));
+        $userName = $userName !== null ? trim(strip_tags($userName)) : null;
+        $sessionId = $sessionId !== null ? trim($sessionId) : null;
 
-        if ($question === '') {
-            return 'Silakan tulis pertanyaan Anda tentang Teduh Glamping, reservasi, atau pembayaran. 😊';
+        if ($userName === '') {
+            $userName = null;
+        }
+        if ($sessionId === '') {
+            $sessionId = null;
         }
 
-        // Ketersediaan: parse tanggal dari pertanyaan (real-time, tidak di-cache)
+        if ($question === '') {
+            $question = 'Halo';
+        }
+
+        try {
+            if ($sessionId) {
+                $this->messages->log($sessionId, 'user', $question, $userName, ['source' => 'web']);
+                if (empty($history)) {
+                    $history = $this->messages->recentHistory($sessionId, 12);
+                }
+            }
+        } catch (Throwable $e) {
+            Log::warning('Gagal menyimpan/log histori chat user', ['error' => $e->getMessage()]);
+        }
+
         $stay = $this->extractStay($question);
         $availability = null;
 
@@ -55,43 +82,90 @@ class ChatbotService
                 : $this->availabilityOverview();
         }
 
+        $orderCode = $this->extractOrderCode($question);
+        $reservationStatus = $orderCode !== null ? $this->reservationStatusContext($orderCode) : null;
+
         $key = (string) config('services.gemini.key', '');
+        $learning = '';
+        try {
+            $learning = $this->messages->relevantExamples($question, 6);
+        } catch (Throwable $e) {
+            $learning = '';
+        }
 
-        if ($key !== '') {
+        $reply = null;
+        if ($key === '') {
+            $reply = 'Maaf, asisten AI sedang tidak tersedia saat ini. Silakan coba lagi nanti atau hubungi WhatsApp pengelola. 🙏';
+        } else {
             try {
-                $reply = $this->askGemini($key, $question, $this->systemPrompt($availability));
-
-                if ($reply !== null) {
-                    return $reply;
-                }
+                $reply = $this->askGemini(
+                    $key,
+                    $question,
+                    $this->systemPrompt($availability, $reservationStatus, $userName, $learning),
+                    $history
+                );
             } catch (Throwable $e) {
-                Log::warning('Chatbot Gemini gagal, fallback ke basis pengetahuan.', ['error' => $e->getMessage()]);
+                Log::warning('Chatbot Gemini gagal', ['error' => $e->getMessage()]);
+                $reply = null;
+            }
+            if ($reply === null) {
+                $reply = 'Maaf, asisten AI sedang sibuk. Silakan coba lagi sebentar ya. 🙏';
             }
         }
 
-        return $this->knowledgeBaseAnswer($question, $stay);
+        try {
+            if ($sessionId) {
+                $this->messages->log($sessionId, 'bot', $reply, $userName, ['source' => 'web', 'question' => mb_substr($question, 0, 200)]);
+            }
+        } catch (Throwable $e) {
+            Log::warning('Gagal menyimpan/log histori chat bot', ['error' => $e->getMessage()]);
+        }
+
+        return $reply;
     }
 
     /**
      * Tanyakan ke Gemini. Mengembalikan null bila respons tidak bisa dipakai.
+     *
+     * @param  array<int, array{role: string, text: string}>  $history
      */
-    protected function askGemini(string $key, string $question, string $system): ?string
+    protected function askGemini(string $key, string $question, string $system, array $history = []): ?string
     {
         $baseUrl = rtrim((string) config('services.gemini.base_url'), '/');
         $model = (string) config('services.gemini.model', 'gemini-3.5-flash-lite');
 
-        $response = Http::timeout(25)
+        $contents = [];
+        $history = array_slice($history, -6);
+
+        foreach ($history as $turn) {
+            $text = trim(strip_tags((string) ($turn['text'] ?? '')));
+
+            if ($text === '') {
+                continue;
+            }
+
+            $role = ($turn['role'] ?? 'user') === 'bot' ? 'model' : 'user';
+
+            $contents[] = ['role' => $role, 'parts' => [['text' => mb_substr($text, 0, 350)]]];
+        }
+
+        while ($contents !== [] && $contents[0]['role'] === 'model') {
+            array_shift($contents);
+        }
+
+        $contents[] = ['role' => 'user', 'parts' => [['text' => mb_substr($question, 0, 500)]]];
+
+        $response = Http::timeout(10)
+            ->connectTimeout(5)
             ->asJson()
             ->post("{$baseUrl}/models/{$model}:generateContent?key={$key}", [
                 'systemInstruction' => [
                     'parts' => [['text' => $system]],
                 ],
-                'contents' => [
-                    ['role' => 'user', 'parts' => [['text' => $question]]],
-                ],
+                'contents' => $contents,
                 'generationConfig' => [
                     'temperature' => 0.4,
-                    'maxOutputTokens' => 700,
+                    'maxOutputTokens' => 350,
                 ],
             ]);
 
@@ -112,39 +186,61 @@ class ChatbotService
      * Instruksi sistem + konteks bisnis terkini (dari database, cache 5 menit).
      * Bisa dilengkapi blok ketersediaan real-time bila pertanyaannya soal tanggal.
      */
-    protected function systemPrompt(?string $availability = null): string
+    protected function systemPrompt(?string $availability = null, ?string $reservationStatus = null, ?string $userName = null, ?string $learningExamples = null): string
     {
         $prompt = <<<'PROMPT'
-Kamu adalah "Teduh Bot", asisten virtual resmi SIRESTEDUH milik BUMDes Wisata Teduh
-(glamping & wisata). Aturan yang WAJIB kamu ikuti:
+Kamu adalah "Teduh Bot", asisten virtual AI di situs SIRESTEDUH (BUMDes Wisata Teduh).
 
-1. Selalu jawab dalam Bahasa Indonesia yang santun, ramah, singkat (maksimal ±120 kata),
-   dan mudah dipahami tamu.
-2. Jawab hanya seputar: Teduh Glamping, unit/penginapan, tiket masuk, alat wisata,
-   aula, UMKM/makanan, cara reservasi, pembayaran, e-tiket, check-in, dan status pesanan.
-3. HANYA gunakan angka harga & data dari KONTEKS BISNIS di bawah ini.
-   JANGAN pernah mengarang harga, tanggal, kebijakan, atau fasilitas yang tidak ada di konteks.
-4. Untuk soal ketersediaan: gunakan bagian KETERSEDIAAN TERKINI bila ada.
-   JANGAN PERNAH menebak ketersediaan tanpa data. Jika tamu bertanya ketersediaan
-   tanpa menyebut tanggal, ringkas data 7 hari yang tersedia lalu minta tanggal pasti.
-5. Jika pertanyaan di luar topik (politik, coding, curhat, hal lain), tolak dengan sopan
-   lalu tawarkan kembali topik layanan Teduh.
-6. Jika data tidak tersedia di konteks, sarankan menghubungi WhatsApp pengelola.
-7. Pandu pelanggan ke halaman yang tepat saat relevan:
-   - Reservasi & pembelian: /checkout
-   - Cek status pesanan & QR e-tiket: /status (butuh kode order, contoh SIRES-XXXXXX)
-   - Pembayaran & unggah bukti: /pembayaran/{kode-order}
-8. Format jawaban: teks biasa dengan baris baru dan tanda - bila perlu daftar.
-   Jangan pakai markdown tebal (**) atau tabel.
+Aturan:
+1. Jawab dalam Bahasa Indonesia yang ramah, jelas, dan membantu.
+2. Kamu bisa menjawab PERTANYAAN APA SAJA (umum, pengetahuan, saran, teknologi, dll), bukan hanya seputar Teduh.
+3. Jika pertanyaan berkaitan dengan Teduh Glamping/SIRESTEDUH (unit, harga, tiket, alat wisata, aula, UMKM, reservasi, pembayaran, e-tiket, check-in, status pesanan, ketersediaan), gunakan data dari KONTEKS BISNIS di bawah dan JANGAN mengarang harga, tanggal, kebijakan, atau ketersediaan.
+4. Untuk ketersediaan: gunakan KETERSEDIAAN TERKINI bila ada dan jangan menebak. Jika ditanya ketersediaan tanpa tanggal, minta tanggal check-in yang diinginkan.
+5. Untuk status pesanan: gunakan STATUS PESANAN bila ada. Jika ditanya status tanpa kode order, minta kode order (contoh: SIRES-XXXXXX) atau arahkan ke halaman status.
+6. WAJIB: Jika ada CONTOH PERCAKAPAN TERDAHULU (data yang sudah dipelajari) yang relevan dengan pertanyaan, jawab selaras dan konsisten mengikuti jawaban tersebut; gunakan sebagai acuan utama untuk pertanyaan serupa. Jangan bertentangan kecuali data/konteks bisnis terkini menyatakan berbeda.
+7. Arahkan ke halaman yang relevan bila sesuai: checkout (reservasi/pembelian), status (cek pesanan & QR e-tiket), pembayaran {kode-order} (unggah bukti).
+8. Format jawaban rapi (baris baru/daftar dengan - bila perlu). Hindari markdown tebal (**) atau tabel.
+9. Pahami pertanyaan lanjutan dari riwayat percakapan.
 
-KONTEKS BISNIS (data terkini):
-PROMPT.$this->businessContext();
+KONTEKS BISNIS TEDUH (data terkini, gunakan bila relevan):
+PROMPT.($userName !== null ? "Nama tamu: {$userName}. Sapa bila relevan.\n\n" : "\n").$this->businessContext();
 
         if ($availability !== null) {
-            $prompt .= "\n\nKETERSEDIAAN TERKINI (real-time dari sistem reservasi):\n".$availability;
+            $prompt .= "\n\nKETERSEDIAAN TERKINI (real-time):\n".$availability;
         }
 
+        if ($reservationStatus !== null) {
+            $prompt .= "\n\nSTATUS PESANAN (real-time):\n".$reservationStatus;
+        }
+
+        if ($learningExamples) {
+            $prompt .= "\n\nCONTOH PERCAKAPAN TERDAHULU (data yang sudah dipelajari, wajib dijadikan acuan jawaban bila relevan dengan pertanyaan):\n".$learningExamples;
+        }
+
+        $prompt .= "\n\nINFORMASI FASILITAS & WISATA TEDUH GLAMPING BONDOWOSO (gunakan untuk menjawab pertanyaan fasilitas/pemandian/wisata):\n".$this->facilityContext();
+
         return $prompt;
+    }
+
+    protected function facilityContext(): string
+    {
+        return <<<'TEXT'
+Teduh Glamping Bondowoso (lereng Gunung Raung, Sumberwringin) memiliki fasilitas pemandian berupa kolam alami (sendang) yang berasal langsung dari sumber mata air pegunungan. Selain area berendam dan bermain air, kawasan wisata ini dilengkapi berbagai fasilitas penunjang untuk pengunjung harian maupun tamu yang menginap.
+
+Fasilitas Pemandian & Kolam Alami:
+- Sendang Alami: kolam pemandian terbentuk dari aliran tiga sumber mata air asli yang dibendung menyerupai kolam renang terbuka. Air sangat jernih dan terasa dingin karena mengalir langsung dari pegunungan tanpa kaporit.
+- Aliran Sungai & Air Terjun Mini: kawasan sekitar kolam terhubung dengan aliran sungai berbatu dan pancuran air menyerupai air terjun mini, cocok untuk bermain air bersama keluarga.
+- Kamar Mandi & Toilet Bilas: tersedia toilet dan ruang ganti gratis di sekitar area wisata untuk pengunjung yang selesai berenang atau bermain air.
+
+Fasilitas Akomodasi & Area Santai:
+- Tenda & Kabin Glamping: unit tenda kerucut kayu serta anjungan gubuk kayu yang menghadap ke aliran sungai atau sendang. Paket menginap umumnya dilengkapi kasur/matras, bantal, selimut, colokan listrik, hingga fasilitas api unggun dan barbeque.
+- Teduh Cafe & Area Kuliner: pengunjung dapat bersantai di kursi kayu tepi sungai sambil menikmati kopi Arabika dan Robusta lokal lereng Gunung Raung. Tersedia warung dan pojok UMKM desa (camilan, minuman herbal, makanan tradisional).
+- Pendopo & Gazebo: area berkumpul berupa pendopo luas, aula makan, dan gazebo untuk beristirahat maupun acara komunitas/keluarga.
+
+Fasilitas Umum & Aktivitas Tambahan:
+- Fasilitas Ibadah & Parkir: tersedia musala yang memadai serta area parkir kendaraan di dalam kawasan wisata.
+- Jalur Trekking & Pos Registrasi: lokasi ini berfungsi sebagai pos registrasi pendakian Gunung Raung via Sumberwringin sekaligus menyediakan jalur trekking, penyewaan sepeda, dan paket ATV keliling desa.
+TEXT;
     }
 
     /**
@@ -153,8 +249,8 @@ PROMPT.$this->businessContext();
      */
     protected function businessContext(): string
     {
-        return Cache::remember(self::CONTEXT_CACHE_KEY, 60, function (): string {
-            try {
+        try {
+            return Cache::remember(self::CONTEXT_CACHE_KEY, 300, function (): string {
                 $lines = [];
 
                 $unitLabels = ['glamping' => 'Glamping (menginap)', 'aula' => 'Aula (sewa)', 'alat_wisata' => 'Alat Wisata (sewa)'];
@@ -176,15 +272,16 @@ PROMPT.$this->businessContext();
                 });
 
                 $lines[] = sprintf('- Pembayaran: transfer bank %s a/n %s (%s), lalu unggah bukti di halaman pembayaran.', config('services.payment.bank'), config('services.payment.account_name'), config('services.payment.account_number'));
-                $lines[] = sprintf('- Konfirmasi / bantuan manusia: WhatsApp pengelola %s.', config('services.payment.whatsapp'));
-                $lines[] = '- Alur reservasi: pilih unit/tiket di /checkout -> isi data pemesan -> transfer & unggah bukti di /pembayaran/{kode} -> admin verifikasi -> e-tiket QR dikirim via WhatsApp -> scan QR saat check-in di gerbang.';
-                $lines[] = sprintf('- Status pesanan bisa dicek di /status dengan kode order. Tanggal hari ini: %s.', Carbon::now()->translatedFormat('d F Y'));
+                $lines[] = sprintf('- Konfirmasi bantuan manusia: WhatsApp pengelola %s.', config('services.payment.whatsapp'));
+                $lines[] = '- Tentang: BUMDes Wisata Teduh mengelola wisata Teduh Glamping — glamping (menginap), aula, alat wisata, tiket masuk gerbang, serta gerai UMKM. Semua reservasi dilakukan online lewat SIRESTEDUH.';
+                $lines[] = '- Alur reservasi: pilih unit/tiket di checkout -> isi data pemesan -> transfer & unggah bukti di pembayaran {kode} -> admin verifikasi -> e-tiket QR dikirim via WhatsApp -> scan QR saat check-in di gerbang.';
+                $lines[] = '- Status pesanan bisa dicek di status dengan kode order.';
 
                 return implode("\n", $lines);
-            } catch (Throwable) {
-                return '- Data harga sedang tidak tersedia. Arahkan tamu ke /checkout atau WhatsApp pengelola.';
-            }
-        });
+            }).sprintf("\n- Tanggal hari ini: %s.", Carbon::now()->translatedFormat('d F Y'));
+        } catch (Throwable) {
+            return '- Data harga sedang tidak tersedia. Arahkan tamu ke checkout atau WhatsApp pengelola.';
+        }
     }
 
     // =====================================================================
@@ -322,7 +419,7 @@ PROMPT.$this->businessContext();
 
             return implode("\n", $lines);
         } catch (Throwable) {
-            return '- Data ketersediaan sedang tidak bisa dihitung. Sarankan tamu memeriksa langsung di /checkout.';
+            return '- Data ketersediaan sedang tidak bisa dihitung. Sarankan tamu memeriksa langsung di checkout.';
         }
     }
 
@@ -332,9 +429,9 @@ PROMPT.$this->businessContext();
     protected function availabilityOverview(): string
     {
         try {
-            $lines = ['- Rentang: 7 hari ke depan dari hari ini.'];
+            $lines = ['- Rentang: 3 hari ke depan dari hari ini.'];
 
-            for ($i = 0; $i < 7; $i++) {
+            for ($i = 0; $i < 3; $i++) {
                 $day = Carbon::today()->addDays($i);
                 $booked = $this->availability->bookedCountPerUnit($day, $day->copy()->addDay());
                 $parts = [];
@@ -351,19 +448,140 @@ PROMPT.$this->businessContext();
 
             return implode("\n", $lines);
         } catch (Throwable) {
-            return '- Data ketersediaan sedang tidak bisa dihitung. Sarankan tamu memeriksa langsung di /checkout.';
+            return '- Data ketersediaan sedang tidak bisa dihitung. Sarankan tamu memeriksa langsung di checkout.';
         }
     }
 
     // =====================================================================
     // Fallback tanpa AI
     // =====================================================================
+    // Status pesanan langsung dari kode order
+    // =====================================================================
+
+    /**
+     * Ekstrak kode order SIRES-XXXX dari pertanyaan (case-insensitive).
+     */
+    protected function extractOrderCode(string $question): ?string
+    {
+        if (preg_match('/\b(SIRES-[A-Za-z0-9]{4,})\b/u', $question, $m) === 1) {
+            return strtoupper($m[1]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Apakah pertanyaan menanyakan status pesanan?
+     */
+    protected function isStatusQuestion(string $question): bool
+    {
+        $q = mb_strtolower($question);
+
+        foreach (['status', 'pesanan saya', 'order', 'kode order', 'cek pesanan', 'cek order'] as $kw) {
+            if (str_contains($q, $kw)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Ringkasan status pesanan dari DB untuk kode order tertentu.
+     * Mengembalikan null bila kode tidak ditemukan.
+     */
+    protected function reservationStatusContext(string $orderCode): ?string
+    {
+        try {
+            $reservation = Reservation::query()
+                ->where('order_code', $orderCode)
+                ->with(['visitor', 'unit', 'payment', 'addons.product', 'ticket'])
+                ->first();
+
+            if ($reservation === null) {
+                return "Kode order {$orderCode} tidak ditemukan di sistem. Pastikan kode benar (contoh: SIRES-ABC12345) atau cek kembali di halaman status. 🔍";
+            }
+
+            $labels = [
+                'pending' => 'Menunggu Pembayaran',
+                'waiting_verification' => 'Menunggu Verifikasi',
+                'paid' => 'Lunas',
+                'confirmed' => 'Terverifikasi',
+                'cancelled' => 'Dibatalkan',
+            ];
+
+            $statusLabel = $labels[$reservation->status] ?? $reservation->status;
+
+            $lines = [];
+            $lines[] = "Kode Order: {$reservation->order_code}";
+            $lines[] = "Status: {$statusLabel}";
+            $lines[] = 'Total: Rp '.number_format((float) $reservation->total_price, 0, ',', '.');
+
+            if ($reservation->check_in_date !== null) {
+                $lines[] = 'Check-in: '.$reservation->check_in_date->translatedFormat('d M Y');
+            }
+
+            if ($reservation->check_out_date !== null) {
+                $lines[] = 'Check-out: '.$reservation->check_out_date->translatedFormat('d M Y');
+            }
+
+            if ($reservation->unit !== null) {
+                $lines[] = 'Unit: '.$reservation->unit->name.' ('.$reservation->unit->type.')';
+            }
+
+            $addons = $reservation->addons;
+
+            if ($addons->isNotEmpty()) {
+                $addonLines = [];
+
+                foreach ($addons as $a) {
+                    $name = $a->product?->name ?? 'Produk';
+                    $addonLines[] = $name.' x'.$a->quantity;
+                }
+
+                $lines[] = 'Tambahan: '.implode(', ', $addonLines);
+            }
+
+            $payment = $reservation->payment;
+
+            if ($payment !== null) {
+                $lines[] = 'Bukti pembayaran: '.($payment->proof_image ? 'sudah diunggah' : 'belum diunggah');
+            } else {
+                $lines[] = 'Bukti pembayaran: belum diunggah';
+            }
+
+            if ($reservation->ticket !== null) {
+                $lines[] = 'E-tiket QR: tersedia ('.($reservation->ticket->is_used ? 'sudah dipakai' : 'belum dipakai').')';
+            } elseif (in_array($reservation->status, ['paid', 'confirmed'], true)) {
+                $lines[] = 'E-tiket QR: akan tersedia setelah diverifikasi admin';
+            }
+
+            $lines[] = '';
+            $lines[] = 'Detail lengkap & QR e-tiket bisa dilihat di status dengan kode order ini. 🎫';
+
+            if ($reservation->status === 'pending') {
+                $lines[] = "Silakan transfer sesuai nominal lalu unggah bukti di pembayaran {$reservation->order_code}. 💳";
+            } elseif ($reservation->status === 'waiting_verification') {
+                $lines[] = 'Bukti sedang diverifikasi admin. E-tiket QR akan dikirim ke WhatsApp setelah terverifikasi. ⏳';
+            } elseif (in_array($reservation->status, ['paid', 'confirmed'], true)) {
+                $lines[] = 'Pembayaran terverifikasi. Tunjukkan QR e-tiket saat check-in di gerbang. ✅';
+            } elseif ($reservation->status === 'cancelled') {
+                $lines[] = 'Pesanan ini telah dibatalkan. Hubungi WhatsApp pengelola untuk info lebih lanjut. 🙏';
+            }
+
+            return implode("\n", $lines);
+        } catch (Throwable) {
+            return 'Maaf, data status pesanan sedang tidak bisa diambil. Silakan cek langsung di status atau hubungi WhatsApp pengelola. 🙏';
+        }
+    }
+
+    // =====================================================================
 
     /**
      * Fallback tanpa AI: pertanyaan ketersediaan dijawab dari data real-time,
      * sisanya FAQ berbasis skor kata kunci + data DB.
      */
-    protected function knowledgeBaseAnswer(string $question, ?array $stay = null): string
+    protected function knowledgeBaseAnswer(string $question, ?array $stay = null, ?string $userName = null): string
     {
         $q = mb_strtolower($question);
 
@@ -395,7 +613,7 @@ PROMPT.$this->businessContext();
         }
 
         if ($scores === []) {
-            return $this->defaultAnswer();
+            return $this->defaultAnswer($userName);
         }
 
         arsort($scores);
@@ -453,11 +671,11 @@ PROMPT.$this->businessContext();
                 $body .= "\n\n❌ Penuh:\n".implode("\n", $penuh);
             }
 
-            $body .= "\n\nData dihitung real-time dari sistem reservasi. Yuk amankan slot lewat /checkout! 🏕️";
+            $body .= "\n\nData dihitung real-time dari sistem reservasi. Yuk amankan slot lewat checkout! 🏕️";
 
             return $body;
         } catch (Throwable) {
-            return 'Maaf, data ketersediaan sedang tidak bisa dihitung. Silakan cek langsung di /checkout atau hubungi WhatsApp pengelola. 🙏';
+            return 'Maaf, data ketersediaan sedang tidak bisa dihitung. Silakan cek langsung di checkout atau hubungi WhatsApp pengelola. 🙏';
         }
     }
 
@@ -474,7 +692,7 @@ PROMPT.$this->businessContext();
             $rows = Unit::query()->orderBy('type')->get(['name', 'type', 'price']);
 
             if ($rows->isEmpty()) {
-                return 'Daftar harga sedang tidak tersedia. Silakan buka /checkout untuk melihat pilihan terkini.';
+                return 'Daftar harga sedang tidak tersedia. Silakan buka checkout untuk melihat pilihan terkini.';
             }
 
             $label = ['glamping' => 'Glamping', 'aula' => 'Aula', 'alat_wisata' => 'Alat Wisata'];
@@ -484,14 +702,14 @@ PROMPT.$this->businessContext();
                 $out .= sprintf("- %s %s: %s\n", $label[$u->type] ?? $u->type, $u->name, $formatRp((float) $u->price));
             }
 
-            return trim($out)."\nBuka /checkout untuk mulai memesan. 😊";
+            return trim($out)."\nBuka checkout untuk mulai memesan. 😊";
         };
 
         $ticketPrice = function () use ($formatRp): string {
             $tickets = Product::query()->where('category', 'tiket_masuk')->get(['name', 'price']);
 
             if ($tickets->isEmpty()) {
-                return 'Harga tiket masuk dapat dilihat langsung di /checkout.';
+                return 'Harga tiket masuk dapat dilihat langsung di checkout.';
             }
 
             $out = "Harga Tiket Masuk:\n";
@@ -500,13 +718,52 @@ PROMPT.$this->businessContext();
                 $out .= sprintf("- %s: %s\n", $t->name, $formatRp((float) $t->price));
             }
 
-            return trim($out)."\nTiket bisa dibeli online di /checkout atau langsung di loket gerbang.";
+            return trim($out)."\nTiket bisa dibeli online di checkout atau langsung di loket gerbang.";
+        };
+
+        // Produk UMKM & gerai (semua kecuali tiket) — langsung dari tabel products.
+        $productList = function () use ($formatRp): string {
+            $rows = Product::query()->where('category', '!=', 'tiket_masuk')
+                ->orderBy('category')->orderBy('name')
+                ->get(['name', 'category', 'price', 'stock', 'type']);
+
+            if ($rows->isEmpty()) {
+                return 'Daftar produk gerai sedang kosong. Silakan cek pilihan terbaru di checkout.';
+            }
+
+            $label = ['makanan' => 'Makanan', 'minuman' => 'Minuman', 'souvenir' => 'Souvenir', 'baju_merchandise' => 'Merchandise', 'produk_umkm' => 'UMKM', 'addon' => 'Add-on'];
+            $out = "Produk UMKM & gerai kami:\n";
+
+            foreach ($rows as $p) {
+                $stok = $p->stock > 0 ? 'stok '.$p->stock : 'stok habis';
+                $channel = $p->type === 'pos' ? 'di loket' : 'online di checkout';
+                $out .= sprintf("- %s %s: %s (%s, tersedia %s)\n", $label[$p->category] ?? $p->category, $p->name, $formatRp((float) $p->price), $stok, $channel);
+            }
+
+            return trim($out)."\nUntuk pemesanan online, tambahkan saat checkout. 🛍️";
+        };
+
+        // Unit per tipe (glamping / aula / alat wisata) dari tabel units.
+        $typedUnitList = function (string $type, string $title) use ($formatRp): string {
+            $rows = Unit::query()->where('type', $type)->orderBy('name')->get(['name', 'price', 'capacity', 'stock']);
+
+            if ($rows->isEmpty()) {
+                return 'Belum ada unit '.$title.' yang terdaftar. Cek checkout untuk pilihan terbaru.';
+            }
+
+            $out = $title.":\n";
+
+            foreach ($rows as $u) {
+                $out .= sprintf("- %s: %s (kapasitas %d orang, stok %d)\n", $u->name, $formatRp((float) $u->price), $u->capacity, $u->stock);
+            }
+
+            return trim($out)."\nPesan via checkout — pilihannya menyesuaikan data terkini. 😊";
         };
 
         return [
             [
                 'keywords' => ['harga', 'biaya', 'tarif', 'berapa', 'price', 'murah', 'mahal'],
-                'answer' => fn (): string => "Untuk harga lengkap, begini:\n\n".$unitList()."\n\nTiket masuk:\n".$ticketPrice(),
+                'answer' => fn (): string => "Untuk harga lengkap, begini:\n\n".$unitList()."\n\nTiket masuk:\n".$ticketPrice()."\n\n".$productList(),
             ],
             [
                 'keywords' => ['tiket masuk', 'tiket', 'entrance'],
@@ -514,19 +771,19 @@ PROMPT.$this->businessContext();
             ],
             [
                 'keywords' => ['reservasi', 'booking', 'pesan', 'cara pesan', 'daftar'],
-                'answer' => fn (): string => "Cara reservasi sangat mudah:\n1. Buka /checkout\n2. Pilih unit glamping / tiket / alat wisata\n3. Isi data pemesan (nama & nomor WhatsApp aktif)\n4. Kirim pesanan — Anda dapat kode order, contoh SIRES-XXXXXX\n5. Transfer sesuai nominal lalu unggah bukti di halaman pembayaran\n6. Setelah admin verifikasi, e-tiket QR dikirim ke WhatsApp Anda\n7. Tunjukkan QR saat check-in di gerbang 🎫",
+                'answer' => fn (): string => "Cara reservasi sangat mudah:\n1. Buka checkout\n2. Pilih unit glamping, tiket, alat wisata\n3. Isi data pemesan (nama & nomor WhatsApp aktif)\n4. Kirim pesanan — Anda dapat kode order, contoh SIRES-XXXXXX\n5. Transfer sesuai nominal lalu unggah bukti di halaman pembayaran\n6. Setelah admin verifikasi, e-tiket QR dikirim ke WhatsApp Anda\n7. Tunjukkan QR saat check-in di gerbang 🎫",
             ],
             [
                 'keywords' => ['bayar', 'pembayaran', 'transfer', 'qris', 'bank', 'rekening', 'bukti'],
-                'answer' => fn (): string => 'Pembayaran dilakukan via transfer bank '.config('services.payment.bank').' a/n '.config('services.payment.account_name').' ('.config('services.payment.account_number').").\nSetelah transfer, unggah bukti di halaman /pembayaran/{kode-order}.\nAdmin akan memverifikasi (biasanya cepat), lalu e-tiket QR dikirim otomatis ke WhatsApp Anda. ✅",
+                'answer' => fn (): string => 'Pembayaran dilakukan via transfer bank '.config('services.payment.bank').' a/n '.config('services.payment.account_name').' ('.config('services.payment.account_number').").\nSetelah transfer, unggah bukti di halaman pembayaran {kode-order}.\nAdmin akan memverifikasi (biasanya cepat), lalu e-tiket QR dikirim otomatis ke WhatsApp Anda. ✅",
             ],
             [
                 'keywords' => ['check-in', 'checkin', 'check in', 'masuk gerbang', 'qr', 'etiket', 'e-tiket'],
-                'answer' => fn (): string => "Soal check-in:\n- Setelah pembayaran terverifikasi, e-tiket QR dikirim ke WhatsApp Anda\n- QR juga bisa dilihat di /status dengan memasukkan kode order\n- Saat tiba di gerbang, tunjukkan QR kepada petugas untuk discanner\n- Tiket sekali pakai dan otomatis kedaluwarsa setelah dipakai 🎟️",
+                'answer' => fn (): string => "Soal check-in:\n- Setelah pembayaran terverifikasi, e-tiket QR dikirim ke WhatsApp Anda\n- QR juga bisa dilihat di status dengan memasukkan kode order\n- Saat tiba di gerbang, tunjukkan QR kepada petugas untuk discanner\n- Tiket sekali pakai dan otomatis kedaluwarsa setelah dipakai 🎟️",
             ],
             [
                 'keywords' => ['status', 'pesanan saya', 'order', 'kode', 'sires'],
-                'answer' => fn (): string => "Untuk cek status pesanan:\n1. Siapkan kode order Anda (contoh: SIRES-XXXXXX)\n2. Buka /status\n3. Masukkan kode order\n4. Status pembayaran, bukti transfer, dan QR e-tiket tampil di sana 🔍",
+                'answer' => fn (): string => "Untuk cek status pesanan:\n1. Siapkan kode order Anda (contoh: SIRES-XXXXXX)\n2. Buka status\n3. Masukkan kode order\n4. Status pembayaran, bukti transfer, dan QR e-tiket tampil di sana 🔍",
             ],
             [
                 'keywords' => ['glamping', 'tenda', 'menginap', 'kamar', 'penginapan', 'fasilitas'],
@@ -538,7 +795,7 @@ PROMPT.$this->businessContext();
             ],
             [
                 'keywords' => ['jam', 'buka', 'tutup', 'operasional', 'waktu'],
-                'answer' => fn (): string => 'Untuk informasi jam operasional terkini, silakan hubungi WhatsApp pengelola di '.config('services.payment.whatsapp').".\nReservasi online di /checkout bisa dilakukan kapan saja 24 jam. 🕐",
+                'answer' => fn (): string => 'Untuk informasi jam operasional terkini, silakan hubungi WhatsApp pengelola di '.config('services.payment.whatsapp').".\nReservasi online di checkout bisa dilakukan kapan saja 24 jam. 🕐",
             ],
             [
                 'keywords' => ['batal', 'refund', 'uang kembali', 'cancel', 'reschedule', 'ubah tanggal'],
@@ -553,15 +810,61 @@ PROMPT.$this->businessContext();
                 'answer' => fn (): string => 'Sama-sama! 😊 Jika ada pertanyaan lain tentang Teduh Glamping, saya siap membantu. Selamat berwisata! 🏕️',
             ],
             [
-                'keywords' => ['wi-fi', 'wifi', 'parkir', 'toilet', 'kamar mandi', 'mushola', 'puskesmas'],
-                'answer' => fn (): string => 'Untuk detail fasilitas pendukung (parkir, toilet, mushola, dll), silakan tanyakan langsung ke WhatsApp pengelola di '.config('services.payment.whatsapp').' agar informasinya selalu akurat. 🏞️',
+                'keywords' => ['info', 'informasi', 'ringkasan', 'overview', 'menu', 'layanan', 'apa saja', 'bisa apa'],
+                'answer' => fn (): string => "Saya Teduh Bot, asisten BUMDes Wisata Teduh. 🏕️\n\nLayanan kami:\n- Glamping (menginap), aula (sewa acara), alat wisata (sewa)\n- Tiket masuk gerbang\n- Gerai UMKM: makanan, minuman, souvenir, merchandise\n\n".$unitList()."\n\nTiket masuk:\n".$ticketPrice()."\n\nPesan online di checkout, cek status di status dengan kode order. 💬",
+            ],
+            [
+                'keywords' => ['kapasitas', 'berapa orang', 'muat', 'orang'],
+                'answer' => fn (): string => "Kapasitas tiap unit:\n".$unitList()."\n\nBuka checkout untuk melihat detail & ketersediaan. 😊",
+            ],
+            [
+                'keywords' => ['tentang', 'about', 'tentang teduh', 'tentang glamping', 'apa itu', 'apa itu teduh', 'kenapa', 'profil', 'deskripsi', 'pengenalan', 'kenalan'],
+                'answer' => fn (): string => "Teduh Glamping adalah wisata glamping & alam yang dikelola BUMDes Wisata Teduh. 🏕️\n\nLayanan kami:\n- Menginap di unit glamping\n- Sewa aula untuk acara\n- Sewa alat wisata (pendakian)\n- Tiket masuk gerbang\n- Gerai UMKM: makanan, minuman, souvenir, merchandise\n\nSemua reservasi dilakukan online di SIRESTEDUH (checkout): pilih unit/tiket -> isi data pemesan -> bayar & unggah bukti -> e-tiket QR dikirim ke WhatsApp.\n\n".$unitList()."\nButuh penjelasan lebih lanjut? Chat WhatsApp pengelola di ".config('services.payment.whatsapp').'. 😊',
+            ],
+            [
+                'keywords' => ['produk', 'umkm', 'makanan', 'minuman', 'souvenir', 'merchandise', 'kaos', 'cemilan', 'kopi', 'menu', 'dijual', 'jualan', 'gerai'],
+                'answer' => $productList,
+            ],
+            [
+                'keywords' => ['aula', 'gedung', 'serbaguna', 'acara', 'event', 'resepsi', 'rapat'],
+                'answer' => fn (): string => $typedUnitList('aula', 'Aula (sewa untuk acara)'),
+            ],
+            [
+                'keywords' => ['alat wisata', 'alat', 'pendakian', 'hiking', 'outbound', 'trekking', 'perkakas'],
+                'answer' => fn (): string => $typedUnitList('alat_wisata', 'Alat Wisata (sewa)'),
+            ],
+            [
+                'keywords' => ['kontak', 'hubungi', 'whatsapp', 'telepon', 'telp', 'cs', 'pengelola', 'nanya langsung', 'orang'],
+                'answer' => fn (): string => 'Anda bisa menghubungi pengelola via WhatsApp di '.config('services.payment.whatsapp').".\nSaya juga siap menjawab seputar unit, harga, ketersediaan, reservasi, pembayaran, e-tiket, dan status pesanan. 💬",
             ],
         ];
     }
 
-    protected function defaultAnswer(): string
+    protected function defaultAnswer(?string $userName = null): string
     {
-        return "Maaf, saya belum memahami pertanyaan itu. 🙏\nSaya bisa membantu soal:\n- Harga unit glamping, tiket masuk & alat wisata\n- Ketersediaan unit per tanggal\n- Cara reservasi & pembayaran\n- E-tiket QR dan check-in\n- Cek status pesanan\n\nAtau hubungi WhatsApp pengelola di ".config('services.payment.whatsapp').'.';
+        $greet = $userName !== null ? "Halo {$userName}! " : '';
+
+        try {
+            $unitCount = Unit::query()->count();
+            $productCount = Product::query()->count();
+            $ticketCount = Product::query()->where('category', 'tiket_masuk')->count();
+
+            $unitSample = Unit::query()->orderBy('name')->limit(3)->pluck('name')->implode(', ');
+
+            return $greet."Maaf, saya belum memahami pertanyaan itu. 🙏\n\n"
+                ."Saya bisa membantu soal Teduh Glamping:\n"
+                ."- Tentang Teduh Glamping & layanan kami\n"
+                ."- Harga unit glamping, aula, alat wisata ({$unitCount} unit tersedia".($unitSample !== '' ? ', mis. '.$unitSample : '').")\n"
+                ."- Tiket masuk ({$ticketCount} jenis)\n"
+                ."- Produk UMKM & gerai ({$productCount} produk)\n"
+                ."- Ketersediaan unit per tanggal\n"
+                ."- Cara reservasi & pembayaran\n"
+                ."- E-tiket QR dan check-in\n"
+                ."- Cek status pesanan (kirim kode order SIRES-XXXX)\n\n"
+                .'Coba tulis ulang dengan kata lain, atau hubungi WhatsApp pengelola di '.config('services.payment.whatsapp').'.';
+        } catch (Throwable) {
+            return "Maaf, saya belum memahami pertanyaan itu. 🙏\nSaya bisa membantu soal Teduh Glamping: harga & unit, tiket masuk, produk UMKM, ketersediaan, reservasi, pembayaran, e-tiket, dan status pesanan.\nHubungi WhatsApp pengelola di ".config('services.payment.whatsapp').'.';
+        }
     }
 
     // =====================================================================

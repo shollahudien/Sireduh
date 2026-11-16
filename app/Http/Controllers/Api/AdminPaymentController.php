@@ -6,14 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Jobs\SendETicketJob;
 use App\Models\Payment;
 use App\Models\Reservation;
+use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AdminPaymentController extends Controller
 {
-    public function verify(int $id): JsonResponse
+    public function verify(Request $request, int $id): JsonResponse
     {
-        $reservation = DB::transaction(function () use ($id): Reservation {
+        $result = DB::transaction(function () use ($id): array {
             $reservation = Reservation::query()
                 ->with('payment')
                 ->lockForUpdate()
@@ -28,6 +30,11 @@ class AdminPaymentController extends Controller
                 abort(409, 'Pembayaran sudah diproses sebelumnya.');
             }
 
+            $before = [
+                'payment_status' => $payment->status,
+                'reservation_status' => $reservation->status,
+            ];
+
             $payment->update([
                 'status' => 'verified',
                 'verified_at' => now(),
@@ -37,10 +44,40 @@ class AdminPaymentController extends Controller
 
             $reservation->ensureTicket();
 
-            return $reservation->fresh(['payment', 'ticket']);
+            $reservation = $reservation->fresh(['payment', 'ticket']);
+
+            return ['reservation' => $reservation, 'before' => $before];
         });
 
-        SendETicketJob::dispatch($reservation->id);
+        /** @var Reservation $reservation */
+        $reservation = $result['reservation'];
+
+        SendETicketJob::dispatchSync($reservation->id);
+
+        \Log::info('Pembayaran diverifikasi admin', [
+            'reservation_id' => $reservation->id,
+            'order_code' => $reservation->order_code,
+            'payment_status' => $reservation->payment?->status,
+            'reservation_status' => $reservation->status,
+        ]);
+
+        AuditLogger::log(
+            'payment.verified',
+            'Pembayaran diverifikasi admin untuk '.$reservation->order_code,
+            $reservation,
+            [
+                'order_code' => $reservation->order_code,
+                'payment_id' => $reservation->payment?->id,
+                'from' => $result['before'],
+                'to' => [
+                    'payment_status' => $reservation->payment?->status,
+                    'reservation_status' => $reservation->status,
+                ],
+            ],
+            $request,
+            null,
+            $reservation->order_code
+        );
 
         return response()->json([
             'success' => true,

@@ -47,16 +47,8 @@ class ChatbotTest extends TestCase
         });
     }
 
-    public function test_falls_back_to_knowledge_base_when_gemini_fails(): void
+    public function test_returns_busy_message_when_gemini_fails(): void
     {
-        Unit::create([
-            'name' => 'Tenda Keluarga',
-            'type' => 'glamping',
-            'price' => 450000,
-            'capacity' => 4,
-            'stock' => 2,
-        ]);
-
         Http::fake([
             'generativelanguage.googleapis.com/*' => Http::response('internal error', 500),
         ]);
@@ -64,12 +56,10 @@ class ChatbotTest extends TestCase
         $response = $this->postJson('/api/chat', ['message' => 'Berapa harga glamping?']);
 
         $response->assertOk();
-        $reply = (string) $response->json('reply');
-        $this->assertStringContainsString('Tenda Keluarga', $reply);
-        $this->assertStringContainsString('450.000', $reply);
+        $this->assertStringContainsString('sedang sibuk', (string) $response->json('reply'));
     }
 
-    public function test_works_without_api_key_via_fallback(): void
+    public function test_returns_unavailable_message_without_api_key(): void
     {
         config(['services.gemini.key' => null]);
 
@@ -78,19 +68,18 @@ class ChatbotTest extends TestCase
         $response = $this->postJson('/api/chat', ['message' => 'cara reservasi gimana ya']);
 
         $response->assertOk();
-        $reply = (string) $response->json('reply');
-        $this->assertStringContainsString('/checkout', $reply);
-        Http::assertNothingSent(); // Tidak ada panggilan HTTP keluar tanpa key
+        $this->assertStringContainsString('tidak tersedia', (string) $response->json('reply'));
+        Http::assertNothingSent();
     }
 
-    public function test_unknown_question_gets_polite_default_answer(): void
+    public function test_general_question_without_api_key_returns_unavailable_message(): void
     {
         config(['services.gemini.key' => null]);
 
         $response = $this->postJson('/api/chat', ['message' => 'cuaca besok bagaimana ya']);
 
         $response->assertOk();
-        $this->assertStringContainsString('belum memahami', (string) $response->json('reply'));
+        $this->assertStringContainsString('tidak tersedia', (string) $response->json('reply'));
     }
 
     public function test_message_is_required_and_limited(): void
@@ -140,83 +129,106 @@ class ChatbotTest extends TestCase
         ]);
     }
 
-    public function test_availability_fallback_answers_with_real_data_for_indonesian_date(): void
+    public function test_availability_context_includes_real_data_for_indonesian_date(): void
     {
-        config(['services.gemini.key' => null]);
-
         $this->createUnit('Tenda Keluarga', 'glamping', 450000, 2);
         $this->createUnit('Aula Serbaguna', 'aula', 1000000, 1);
 
-        $expectedDate = Carbon::parse('2026-12-20')->translatedFormat('d M Y');
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [['content' => ['parts' => [['text' => 'Tersedia']]]]],
+            ], 200),
+        ]);
 
-        $response = $this->postJson('/api/chat', ['message' => 'apakah glamping tersedia 20 desember 2026?']);
+        $this->postJson('/api/chat', ['message' => 'apakah glamping tersedia 20 desember 2026?']);
 
-        $response->assertOk();
-        $reply = (string) $response->json('reply');
-        $this->assertStringContainsString($expectedDate, $reply);
-        $this->assertStringContainsString('Tenda Keluarga', $reply);
-        $this->assertStringContainsString('450.000', $reply);
-        $this->assertStringContainsString('tersedia 2', $reply);
-        $this->assertStringContainsString('/checkout', $reply);
+        Http::assertSent(function ($request): bool {
+            $system = $request['systemInstruction']['parts'][0]['text'] ?? '';
+
+            return str_contains($system, 'KETERSEDIAAN TERKINI')
+                && str_contains($system, 'Tenda Keluarga')
+                && str_contains($system, '450.000')
+                && str_contains($system, '2 tersedia');
+        });
     }
 
-    public function test_availability_fallback_reports_full_unit_when_booked(): void
+    public function test_availability_context_reports_full_unit_when_booked(): void
     {
-        config(['services.gemini.key' => null]);
-
         $unit = $this->createUnit('Tenda Eksklusif', 'glamping', 500000, 1);
         $this->createBookedReservation($unit, '2026-12-20', '2026-12-21');
 
-        $response = $this->postJson('/api/chat', ['message' => '20 desember 2026 masih ada tenda?']);
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [['content' => ['parts' => [['text' => 'Penuh']]]]],
+            ], 200),
+        ]);
 
-        $response->assertOk();
-        $reply = (string) $response->json('reply');
-        $this->assertStringContainsString('Semua unit penuh', $reply);
-        $this->assertStringContainsString('PENUH', $reply);
+        $this->postJson('/api/chat', ['message' => '20 desember 2026 masih ada tenda?']);
+
+        Http::assertSent(function ($request): bool {
+            $system = $request['systemInstruction']['parts'][0]['text'] ?? '';
+
+            return str_contains($system, 'Tenda Eksklusif') && str_contains($system, '0 dari 1 tersedia');
+        });
     }
 
-    public function test_availability_fallback_counts_nights_and_total(): void
+    public function test_availability_context_counts_nights_and_total(): void
     {
-        config(['services.gemini.key' => null]);
-
         $this->createUnit('Tenda Keluarga', 'glamping', 450000, 2);
 
-        $response = $this->postJson('/api/chat', ['message' => '20 desember 2026 menginap 2 malam ada?']);
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [['content' => ['parts' => [['text' => 'Ada']]]]],
+            ], 200),
+        ]);
 
-        $response->assertOk();
-        $reply = (string) $response->json('reply');
-        $this->assertStringContainsString('2 malam', $reply);
-        $this->assertStringContainsString('900.000', $reply); // 450.000 x 2
-        $this->assertStringContainsString('22 Dec 2026', $reply);
+        $this->postJson('/api/chat', ['message' => '20 desember 2026 menginap 2 malam ada?']);
+
+        Http::assertSent(function ($request): bool {
+            $system = $request['systemInstruction']['parts'][0]['text'] ?? '';
+
+            return str_contains($system, '2 malam') && str_contains($system, '900.000');
+        });
     }
 
-    public function test_availability_fallback_gives_7day_overview_without_date(): void
+    public function test_availability_overview_included_without_date(): void
     {
-        config(['services.gemini.key' => null]);
-
         $this->createUnit('Tenda Keluarga', 'glamping', 450000, 2);
 
-        $response = $this->postJson('/api/chat', ['message' => 'ketersediaan kosong tanggal apa saja ya?']);
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [['content' => ['parts' => [['text' => 'Cek tanggal']]]]],
+            ], 200),
+        ]);
 
-        $response->assertOk();
-        $reply = (string) $response->json('reply');
-        $this->assertStringContainsString('7 hari ke depan', $reply);
-        $this->assertStringContainsString('Tenda Keluarga', $reply);
-        $this->assertStringContainsString('20 desember', $reply); // contoh format tanggal
+        $this->postJson('/api/chat', ['message' => 'ketersediaan kosong tanggal apa saja ya?']);
+
+        Http::assertSent(function ($request): bool {
+            $system = $request['systemInstruction']['parts'][0]['text'] ?? '';
+
+            return str_contains($system, '3 hari ke depan') && str_contains($system, 'Tenda Keluarga');
+        });
     }
 
-    public function test_besok_is_parsed_as_tomorrow(): void
+    public function test_besok_is_parsed_as_tomorrow_in_availability_context(): void
     {
-        config(['services.gemini.key' => null]);
-
         $this->createUnit('Tenda Keluarga', 'glamping', 450000, 2);
 
         $expectedDate = Carbon::tomorrow()->translatedFormat('d M Y');
 
-        $response = $this->postJson('/api/chat', ['message' => 'besok masih ada tenda?']);
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [['content' => ['parts' => [['text' => 'Ada']]]]],
+            ], 200),
+        ]);
 
-        $response->assertOk();
-        $this->assertStringContainsString($expectedDate, (string) $response->json('reply'));
+        $this->postJson('/api/chat', ['message' => 'besok masih ada tenda?']);
+
+        Http::assertSent(function ($request): bool {
+            $system = $request['systemInstruction']['parts'][0]['text'] ?? '';
+
+            return str_contains($system, 'KETERSEDIAAN TERKINI') && str_contains($system, 'Tenda Keluarga');
+        });
     }
 
     public function test_gemini_context_includes_availability_when_date_detected(): void

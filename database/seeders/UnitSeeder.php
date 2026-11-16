@@ -15,7 +15,7 @@ class UnitSeeder extends Seeder
                 'type' => 'glamping',
                 'price' => 350000,
                 'capacity' => 4,
-                'stock' => 5,
+                'stock' => 6,
                 'description' => 'Tenda glamping premium dengan kasur, listrik, dan kamar mandi dalam untuk 4 orang.',
             ],
             [

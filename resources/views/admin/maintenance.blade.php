@@ -7,14 +7,14 @@
     {{-- Toast --}}
     <div x-show="toast.message" x-cloak x-transition
          :class="toast.isError ? 'bg-red-700' : 'bg-green-700'"
-         class="fixed bottom-6 right-6 z-50 text-white text-sm font-semibold rounded-xl shadow-xl px-5 py-3.5">
+         class="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 max-w-[calc(100vw-2rem)] text-white text-sm font-semibold rounded-xl shadow-xl px-5 py-3.5">
         <span x-text="toast.message"></span>
     </div>
 
     {{-- Status banner --}}
-    <div class="rounded-2xl border p-6 flex items-center gap-5"
+    <div class="rounded-2xl border p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5"
          :class="enabled ? 'bg-yellow-50 border-yellow-300' : 'bg-green-50 border-green-200'">
-        <div class="text-6xl" x-text="enabled ? '🛠️' : '✅'"></div>
+        <div class="text-5xl sm:text-6xl" x-text="enabled ? '🛠️' : '✅'"></div>
         <div>
             <p class="text-xs uppercase tracking-widest font-bold text-gray-500">Status Sistem</p>
             <p class="text-2xl font-extrabold" :class="enabled ? 'text-yellow-700' : 'text-green-800'" x-text="enabled ? 'SEDANG DALAM PERBAIKAN' : 'SISTEM AKTIF NORMAL'"></p>
@@ -23,7 +23,7 @@
     </div>
 
     {{-- Toggle --}}
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
         <h2 class="font-bold text-gray-800">Aktifkan / Nonaktifkan</h2>
         <p class="text-xs text-gray-400 mt-1">Saat AKTIF, publik &amp; staf non-admin akan melihat halaman "Sedang dalam Perbaikan". Admin tetap bisa login dan bekerja penuh.</p>
         <button @click="toggle()" :disabled="saving"
@@ -35,7 +35,7 @@
     </div>
 
     {{-- Message --}}
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 sm:p-6">
         <h2 class="font-bold text-gray-800">Pesan yang Ditampilkan</h2>
         <p class="text-xs text-gray-400 mt-1">Pesan ini yang tampil di halaman "Sedang dalam Perbaikan".</p>
         <textarea x-model="message" rows="3" maxlength="500"

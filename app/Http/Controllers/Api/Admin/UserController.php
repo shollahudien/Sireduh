@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\Admin\UserStoreRequest;
 use App\Http\Requests\Api\Admin\UserUpdateRequest;
 use App\Models\User;
+use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -40,6 +41,13 @@ class UserController extends Controller
             'role' => $validated['role'],
         ]);
 
+        AuditLogger::log('user.created', 'Akun pengguna dibuat: '.$user->email, $user, [
+            'user_id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+        ], $request, null, $user->email);
+
         return response()->json([
             'message' => 'Pengguna berhasil ditambahkan.',
             'data' => $this->present($user),
@@ -66,7 +74,14 @@ class UserController extends Controller
             ], 422);
         }
 
+        $before = $user->only(['name', 'email', 'role']);
         $user->update($validated);
+
+        AuditLogger::log('user.updated', 'Akun pengguna diperbarui: '.$user->email, $user, [
+            'user_id' => $user->id,
+            'before' => $before,
+            'after' => $user->only(['name', 'email', 'role']),
+        ], $request, null, $user->email);
 
         return response()->json([
             'message' => 'Pengguna berhasil diperbarui.',
@@ -84,6 +99,11 @@ class UserController extends Controller
         ]);
 
         $user->update(['password' => Hash::make($validated['password'])]);
+
+        AuditLogger::log('user.password_reset', 'Password pengguna direset: '.$user->email, $user, [
+            'user_id' => $user->id,
+            'email' => $user->email,
+        ], $request, null, $user->email);
 
         return response()->json([
             'message' => 'Password berhasil direset.',
@@ -110,6 +130,8 @@ class UserController extends Controller
             ], 422);
         }
 
+        $snapshot = $user->only(['id', 'name', 'email', 'role']);
+
         try {
             $user->delete();
         } catch (Throwable $e) {
@@ -117,6 +139,10 @@ class UserController extends Controller
                 'message' => 'Pengguna tidak bisa dihapus karena memiliki transaksi POS tercatat.',
             ], 422);
         }
+
+        AuditLogger::log('user.deleted', 'Akun pengguna dihapus: '.$snapshot['email'], null, [
+            'deleted_user' => $snapshot,
+        ], $request, null, $snapshot['email']);
 
         return response()->json([
             'message' => 'Pengguna berhasil dihapus.',

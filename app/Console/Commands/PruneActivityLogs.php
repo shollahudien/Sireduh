@@ -29,7 +29,7 @@ class PruneActivityLogs extends Command
     {
         $days = $this->option('days') !== null
             ? (int) $this->option('days')
-            : (int) Setting::get('activity_retention_days', '30');
+            : (int) Setting::get('activity_retention_days', '365');
 
         if ($days <= 0) {
             $this->info('Retensi otomatis nonaktif (activity_retention_days = 0). Tidak ada yang dihapus.');

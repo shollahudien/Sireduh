@@ -48,8 +48,11 @@ class MaintenanceModeTest extends TestCase
 
         $this->get('/login')->assertOk(); // admin boleh membuka form login
 
-        $this->post('/login', ['email' => $admin->email, 'password' => 'secret'])
-            ->assertRedirect('/admin');
+        $this->withSession(['_token' => 'test-token'])->post('/login', [
+            '_token' => 'test-token',
+            'email' => $admin->email,
+            'password' => 'secret',
+        ])->assertRedirect('/admin');
 
         $this->actingAs($admin)->get('/admin')->assertOk();
     }
@@ -65,7 +68,11 @@ class MaintenanceModeTest extends TestCase
             'role' => 'kasir',
         ]);
 
-        $response = $this->post('/login', ['email' => $kasir->email, 'password' => 'secret']);
+        $response = $this->withSession(['_token' => 'test-token'])->post('/login', [
+            '_token' => 'test-token',
+            'email' => $kasir->email,
+            'password' => 'secret',
+        ]);
         $response->assertSessionHasErrors('email');
 
         $this->assertGuest();
@@ -88,13 +95,13 @@ class MaintenanceModeTest extends TestCase
             ->assertSee('MAINTENANCE AKTIF');
     }
 
-    public function test_maintenance_page_offers_admin_login_link(): void
+    public function test_maintenance_page_does_not_show_admin_login_link(): void
     {
         Setting::set('maintenance_mode', '1');
 
         $this->get('/')
             ->assertStatus(503)
-            ->assertSee('Masuk sebagai admin');
+            ->assertDontSee('Masuk sebagai admin');
     }
 
     public function test_api_blocked_for_guests_but_not_for_admin_during_maintenance(): void
@@ -110,6 +117,6 @@ class MaintenanceModeTest extends TestCase
             'role' => 'admin',
         ]);
 
-        $this->actingAs($admin)->getJson('/api/admin/dashboard-stats')->assertOk();
+        $this->actingAs($admin)->getJson('/api/admin/notifications')->assertOk();
     }
 }

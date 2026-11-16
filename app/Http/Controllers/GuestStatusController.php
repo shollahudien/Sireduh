@@ -6,6 +6,7 @@ use App\Models\Reservation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 
 class GuestStatusController extends Controller
 {
@@ -32,9 +33,17 @@ class GuestStatusController extends Controller
             $reservation->setRelation('ticket', $reservation->ensureTicket());
         }
 
+        $payment = $reservation->payment;
+
+        // Bukti pembayaran tersimpan di disk private; hanya bisa diakses lewat URL bertanda tangan.
+        $proofUrl = $payment !== null && $payment->proof_image
+            ? URL::temporarySignedRoute('storage.local', now()->addHour(), ['path' => $payment->proof_image], absolute: false)
+            : null;
+
         return response()->json([
             'reservation' => $reservation,
-            'payment' => $reservation->payment,
+            'payment' => $payment,
+            'proof_url' => $proofUrl,
             'ticket' => $reservation->ticket ? [
                 'unique_hash_sha256' => $reservation->ticket->unique_hash_sha256,
                 'is_used' => $reservation->ticket->is_used,

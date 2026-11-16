@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Reservation;
+use App\Services\AuditLogger;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -23,6 +24,16 @@ class ProofController extends Controller
         $path = Storage::disk('private')->path($payment->proof_image);
 
         abort_if(! file_exists($path), 404, 'File bukti pembayaran tidak ditemukan.');
+
+        AuditLogger::log(
+            'payment.proof_viewed',
+            'Bukti pembayaran dilihat: '.$reservation->order_code,
+            $reservation,
+            ['reservation_id' => $reservation->id, 'order_code' => $reservation->order_code, 'payment_id' => $payment->id],
+            request(),
+            ['file_name' => basename($payment->proof_image), 'file_path' => $payment->proof_image],
+            $reservation->order_code
+        );
 
         return response()->file($path);
     }

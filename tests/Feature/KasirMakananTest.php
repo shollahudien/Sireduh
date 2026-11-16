@@ -39,7 +39,11 @@ class KasirMakananTest extends TestCase
     {
         $user = $this->makananUser();
 
-        $response = $this->post('/login', ['email' => $user->email, 'password' => 'secret']);
+        $response = $this->withSession(['_token' => 'test-token'])->post('/login', [
+            '_token' => 'test-token',
+            'email' => $user->email,
+            'password' => 'secret',
+        ]);
 
         $response->assertRedirect('/kasir-makanan');
     }
@@ -73,10 +77,7 @@ class KasirMakananTest extends TestCase
 
         $kasirUtama = User::create(['name' => 'K1', 'email' => 'k1-'.uniqid().'@simateduh.test', 'password' => bcrypt('secret'), 'role' => 'kasir']);
 
-        // Transaksi kasir utama — tidak boleh terlihat oleh kasir makanan
         PosTransaction::create(['user_id' => $kasirUtama->id, 'total_amount' => 99999, 'payment_method' => 'cash']);
-
-        // Transaksi kasir makanan — harus terlihat
         PosTransaction::create(['user_id' => $makanan->id, 'total_amount' => 12000, 'payment_method' => 'qris']);
 
         $response = $this->actingAs($makanan)->getJson('/api/pos/riwayat');
@@ -94,7 +95,7 @@ class KasirMakananTest extends TestCase
     {
         $user = $this->makananUser();
 
-        $minumanDefault = $this->product('minuman', 'Es Teh');            // default false
+        $minumanDefault = $this->product('minuman', 'Es Teh');
         $minumanEnabled = $this->product('minuman', 'Es Jeruk', 'pos', true);
         $this->product('makanan', 'Nasi Uduk', 'pos', true);
 
@@ -106,21 +107,15 @@ class KasirMakananTest extends TestCase
         $this->assertContains('Nasi Uduk', $names);
         $this->assertNotContains('Es Teh', $names);
 
-        // Checkout with enabled minuman
         $checkout = $this->actingAs($user)->postJson('/api/pos/checkout', [
             'payment_method' => 'cash',
-            'items' => [
-                ['product_id' => $minumanEnabled->id, 'quantity' => 1],
-            ],
+            'items' => [['product_id' => $minumanEnabled->id, 'quantity' => 1]],
         ]);
         $checkout->assertStatus(201)->assertJsonPath('success', true);
 
-        // Checkout with disabled minuman is rejected
         $rejected = $this->actingAs($user)->postJson('/api/pos/checkout', [
             'payment_method' => 'cash',
-            'items' => [
-                ['product_id' => $minumanDefault->id, 'quantity' => 1],
-            ],
+            'items' => [['product_id' => $minumanDefault->id, 'quantity' => 1]],
         ]);
         $rejected->assertStatus(422);
     }
@@ -129,44 +124,22 @@ class KasirMakananTest extends TestCase
     {
         $user = $this->makananUser();
         $nasemak = $this->product('makanan', 'Nasi Goreng', 'pos', true);
-
         $minuman = $this->product('minuman', 'Kumary');
+        $unit = Unit::create(['name' => 'Tenda', 'type' => 'alat_wisata', 'price' => 50000, 'capacity' => 2, 'stock' => 1]);
 
-        $unit = Unit::create([
-            'name' => 'Tenda',
-            'type' => 'alat_wisata',
-            'price' => 50000,
-            'capacity' => 2,
-            'stock' => 1,
-        ]);
-
-        // Array berdasarkan product_id yang valid, non-makanan
-        $response = $this->actingAs($user)->postJson('/api/pos/checkout', [
+        $this->actingAs($user)->postJson('/api/pos/checkout', [
             'payment_method' => 'cash',
-            'items' => [
-                ['product_id' => $minuman->id, 'quantity' => 1],
-            ],
-        ]);
-        $response->assertStatus(422);
+            'items' => [['product_id' => $minuman->id, 'quantity' => 1]],
+        ])->assertStatus(422);
 
-        // Unit render ditolak
-        $response2 = $this->actingAs($user)->postJson('/api/pos/checkout', [
+        $this->actingAs($user)->postJson('/api/pos/checkout', [
             'payment_method' => 'cash',
-            'items' => [
-                ['unit_id' => $unit->id, 'quantity' => 1],
-            ],
-        ]);
-        $response2->assertStatus(422);
+            'items' => [['unit_id' => $unit->id, 'quantity' => 1]],
+        ])->assertStatus(422);
 
-        // Makanan tetap boleh
-        $response3 = $this->actingAs($user)->postJson('/api/pos/checkout', [
+        $this->actingAs($user)->postJson('/api/pos/checkout', [
             'payment_method' => 'cash',
-            'items' => [
-                ['product_id' => $nasemak->id, 'quantity' => 2],
-            ],
-        ]);
-        $response3->assertStatus(201)
-            ->assertJsonPath('success', true)
-            ->assertJsonPath('transaction.total_amount', '20000.00');
+            'items' => [['product_id' => $nasemak->id, 'quantity' => 2]],
+        ])->assertStatus(201)->assertJsonPath('success', true)->assertJsonPath('transaction.total_amount', '20000.00');
     }
 }

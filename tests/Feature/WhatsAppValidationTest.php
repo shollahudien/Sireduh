@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Product;
 use App\Models\Visitor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -15,10 +16,21 @@ class WhatsAppValidationTest extends TestCase
      */
     private function validPayload(string $whatsapp, string $name = 'Budi Santoso'): array
     {
+        $product = Product::create([
+            'name' => 'Tiket Masuk WhatsApp Test',
+            'category' => 'tiket_masuk',
+            'price' => 15000,
+            'type' => 'addon',
+            'stock' => 100,
+        ]);
+
         return [
             'visitor_name' => $name,
             'visitor_whatsapp' => $whatsapp,
             'check_in_date' => now()->addDay()->toDateString(),
+            'addons' => [
+                ['product_id' => $product->id, 'quantity' => 1],
+            ],
         ];
     }
 

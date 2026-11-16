@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\ActivityController;
-use App\Http\Controllers\Api\Admin\DashboardController;
+use App\Http\Controllers\Api\Admin\AulaPackageController;
 use App\Http\Controllers\Api\Admin\ETicketSendController;
+use App\Http\Controllers\Api\Admin\GlampingPackageController;
 use App\Http\Controllers\Api\Admin\GlobalSearchController;
 use App\Http\Controllers\Api\Admin\ImageController;
 use App\Http\Controllers\Api\Admin\LogController;
@@ -18,10 +20,12 @@ use App\Http\Controllers\Api\AvailabilityController;
 use App\Http\Controllers\Api\ChatbotController;
 use App\Http\Controllers\Api\ChatbotSpeakController;
 use App\Http\Controllers\Api\CheckInController;
+use App\Http\Controllers\Api\MidtransController;
 use App\Http\Controllers\Api\PaymentUploadController;
 use App\Http\Controllers\Api\PosController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ReservationController;
+use App\Http\Controllers\Api\TelegramWebhookController;
 use App\Http\Controllers\Api\TokenController;
 use App\Http\Controllers\Api\UnitController;
 use Illuminate\Support\Facades\Route;
@@ -37,13 +41,20 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/auth/logout', [TokenController::class, 'logout'])->name('api.auth.logout');
 });
 
+// Telegram webhook (no auth; protected by secret token header)
+Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle'])
+    ->name('api.telegram.webhook')
+    ->middleware('throttle:60,1');
+
 // Module 1 — Public availability (rate limited)
 Route::middleware('throttle:60,1')->group(function (): void {
     Route::get('/units', [UnitController::class, 'index'])->name('api.units.index');
     Route::get('/tickets', [UnitController::class, 'tickets'])->name('api.tickets.index');
     Route::get('/availability', [AvailabilityController::class, 'index'])->name('api.availability.index');
     Route::get('/products', [ProductController::class, 'index'])->name('api.products.index');
-    Route::post('/reservations', [ReservationController::class, 'store'])->name('api.reservations.store');
+    Route::post('/reservations', [ReservationController::class, 'store'])
+        ->name('api.reservations.store')
+        ->middleware('throttle:reservations-store');
     Route::post('/chat', [ChatbotController::class, 'ask'])
         ->name('api.chatbot.ask')
         ->middleware('throttle:15,1');
@@ -55,13 +66,18 @@ Route::middleware('throttle:60,1')->group(function (): void {
     Route::get('/reservations/{orderCode}/payment', [PaymentUploadController::class, 'show'])
         ->name('api.payments.show');
     Route::post('/payments/upload', [PaymentUploadController::class, 'store'])->name('api.payments.upload');
+    Route::post('/payments/midtrans/create', [MidtransController::class, 'create'])->name('api.payments.midtrans.create');
 });
+
+Route::post('/payments/midtrans/notification', [MidtransController::class, 'notification'])
+    ->name('api.payments.midtrans.notification')
+    ->middleware('throttle:60,1');
 
 // Module 7 — Admin API
 Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function (): void {
     // Dashboard & stats
-    Route::get('/dashboard-stats', [DashboardController::class, 'stats'])->name('api.admin.dashboard-stats');
     Route::get('/notifications', [AdminNotificationController::class, 'index'])->name('api.admin.notifications');
+    Route::get('/dashboard-analytics', [DashboardController::class, 'analytics'])->name('api.admin.dashboard.analytics');
 
     // Global search (command palette admin)
     Route::get('/search', [GlobalSearchController::class, 'index'])->name('api.admin.search');
@@ -101,6 +117,17 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function (): v
     Route::post('/units/{unit}/images', [ImageController::class, 'storeUnit'])->name('api.admin.units.images.store');
     Route::delete('/units/{unit}/images/{image}', [ImageController::class, 'destroyUnitImage'])->name('api.admin.units.images.destroy');
 
+    // Glamping & Aula packages (harga per paket/jam)
+    Route::get('/glamping-packages', [GlampingPackageController::class, 'index'])->name('api.admin.glamping-packages.index');
+    Route::post('/glamping-packages', [GlampingPackageController::class, 'store'])->name('api.admin.glamping-packages.store');
+    Route::put('/glamping-packages/{glampingPackage}', [GlampingPackageController::class, 'update'])->name('api.admin.glamping-packages.update');
+    Route::delete('/glamping-packages/{glampingPackage}', [GlampingPackageController::class, 'destroy'])->name('api.admin.glamping-packages.destroy');
+
+    Route::get('/aula-packages', [AulaPackageController::class, 'index'])->name('api.admin.aula-packages.index');
+    Route::post('/aula-packages', [AulaPackageController::class, 'store'])->name('api.admin.aula-packages.store');
+    Route::put('/aula-packages/{aulaPackage}', [AulaPackageController::class, 'update'])->name('api.admin.aula-packages.update');
+    Route::delete('/aula-packages/{aulaPackage}', [AulaPackageController::class, 'destroy'])->name('api.admin.aula-packages.destroy');
+
     // Master data — products
     Route::get('/products', [AdminProductController::class, 'index'])->name('api.admin.products.index');
     Route::post('/products', [AdminProductController::class, 'store'])->name('api.admin.products.store');
@@ -108,6 +135,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function (): v
     Route::put('/products/{product}', [AdminProductController::class, 'update'])->name('api.admin.products.update');
     Route::delete('/products/{product}', [AdminProductController::class, 'destroy'])->name('api.admin.products.destroy');
     Route::patch('/products/{product}/stock', [AdminProductController::class, 'stock'])->name('api.admin.products.stock');
+    Route::get('/products/export', [AdminProductController::class, 'exportCsv'])->name('api.admin.products.export');
     Route::post('/products/{product}/images', [ImageController::class, 'storeProduct'])->name('api.admin.products.images.store');
     Route::delete('/products/{product}/images/{image}', [ImageController::class, 'destroyProductImage'])->name('api.admin.products.images.destroy');
 
@@ -126,11 +154,16 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function (): v
 Route::middleware(['auth', 'role:kasir,kasir_makanan,checkin'])->prefix('pos')->group(function (): void {
     Route::get('/products', [PosController::class, 'products'])->name('api.pos.products');
     Route::get('/units', [PosController::class, 'units'])->name('api.pos.units');
+    Route::get('/glamping-availability', [PosController::class, 'glampingAvailability'])->name('api.pos.glamping.availability');
+    Route::get('/aula-availability', [PosController::class, 'aulaAvailability'])->name('api.pos.aula.availability');
     Route::get('/riwayat', [PosController::class, 'riwayat'])->name('api.pos.riwayat');
     Route::post('/checkout', [PosController::class, 'checkout'])->name('api.pos.checkout');
 });
 
 // Module 6 — QR check-in (rate limited: brute-force protection)
-Route::middleware(['auth', 'role:checkin', 'throttle:10,1'])->prefix('checkin')->group(function (): void {
-    Route::post('/validate', [CheckInController::class, 'validateHash'])->name('api.checkin.validate');
+Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->group(function (): void {
+    Route::get('/stats', [CheckInController::class, 'stats'])->name('api.checkin.stats');
+    Route::post('/validate', [CheckInController::class, 'validateHash'])
+        ->name('api.checkin.validate')
+        ->middleware('throttle:10,1');
 });

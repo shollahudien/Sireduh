@@ -10,11 +10,6 @@ use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
-    public function index()
-    {
-        return view('admin.reports.index');
-    }
-
     /**
      * JSON endpoint untuk dashboard laporan (Alpine.js fetch)
      */

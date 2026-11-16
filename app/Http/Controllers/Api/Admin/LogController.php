@@ -251,4 +251,18 @@ class LogController extends Controller
 
         return round($bytes, 1).' '.$units[$unit];
     }
+
+    /**
+     * Simpan urutan widget dashboard.
+     */
+    public function saveWidgetOrder(Request $request): JsonResponse
+    {
+        $widgetOrder = $request->input('widgetOrder', ['today-activity', 'summary-stats', 'pending-reservations', 'low-stock-alert']);
+        $value = json_encode($widgetOrder);
+        DB::table('settings')->insertOrUpdate(
+            ['key' => 'dashboard_widgets', 'value' => $value]
+        );
+
+        return response()->json(['success' => true, 'widgetOrder' => $widgetOrder]);
+    }
 }

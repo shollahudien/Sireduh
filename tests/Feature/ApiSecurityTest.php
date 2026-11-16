@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\GlampingPackage;
 use App\Models\Product;
 use App\Models\Reservation;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class ApiSecurityTest extends TestCase
@@ -24,6 +26,18 @@ class ApiSecurityTest extends TestCase
         ]);
     }
 
+    private function glampingPackage(): GlampingPackage
+    {
+        return GlampingPackage::create([
+            'code' => 'glamp_sec_6h',
+            'name' => 'Paket 6 Jam',
+            'duration_hours' => 6,
+            'price' => 200000,
+            'is_active' => true,
+            'sort_order' => 1,
+        ]);
+    }
+
     private function ticketProduct(): Product
     {
         return Product::create([
@@ -37,7 +51,10 @@ class ApiSecurityTest extends TestCase
 
     public function test_frontend_total_price_is_ignored_and_recalculated_server_side(): void
     {
+        Carbon::setTestNow(Carbon::parse('2026-12-01 07:00:00', 'Asia/Jakarta'));
+
         $unit = $this->glampingUnit();
+        $package = $this->glampingPackage();
         $product = $this->ticketProduct();
 
         $payload = [
@@ -45,21 +62,23 @@ class ApiSecurityTest extends TestCase
             'visitor_whatsapp' => '08170000999',
             'visitor_email' => 'manipulator@example.com',
             'unit_id' => $unit->id,
-            'check_in_date' => now()->addDay()->toDateString(),
-            'check_out_date' => now()->addDays(3)->toDateString(),
+            'package_id' => $package->code,
+            'check_in_date' => now('Asia/Jakarta')->addDay()->toDateString(),
             'addons' => [
                 ['product_id' => $product->id, 'quantity' => 2],
             ],
-            // Penyerang mencoba memalsukan total: 2 malam x 350.000 + 2 tiket = 730.000
+            // Penyerang mencoba memalsukan total: paket 200.000 + 2 tiket = 230.000
             'total_price' => 1,
         ];
 
         $response = $this->postJson('/api/reservations', $payload);
 
-        $response->assertStatus(201)->assertJsonPath('total_price', 730000);
+        $response->assertStatus(201)->assertJsonPath('total_price', 230000);
 
         $reservation = Reservation::latest('id')->first();
-        $this->assertEquals(730000.0, (float) $reservation->total_price);
+        $this->assertEquals(230000.0, (float) $reservation->total_price);
+
+        Carbon::setTestNow();
     }
 
     public function test_forged_hash_returns_404_and_valid_ticket_returns_200(): void

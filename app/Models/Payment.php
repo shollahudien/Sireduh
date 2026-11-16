@@ -11,13 +11,18 @@ class Payment extends Model
     use HasFactory;
 
     protected $fillable = [
-        'reservation_id', 'proof_image', 'status', 'verified_at',
+        'reservation_id', 'method', 'provider', 'provider_order_id', 'provider_transaction_id', 'payment_type',
+        'snap_token', 'snap_redirect_url', 'va_number', 'qr_string',
+        'proof_image', 'status', 'verified_at', 'paid_at', 'expires_at', 'gateway_payload',
     ];
 
     protected function casts(): array
     {
         return [
             'verified_at' => 'datetime',
+            'paid_at' => 'datetime',
+            'expires_at' => 'datetime',
+            'gateway_payload' => 'array',
             'status' => 'string',
         ];
     }

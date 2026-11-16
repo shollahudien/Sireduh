@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -30,11 +31,18 @@ class MaintenanceController extends Controller
             'message' => ['nullable', 'string', 'max:500'],
         ]);
 
+        $before = ['enabled' => Setting::maintenanceEnabled(), 'message' => Setting::maintenanceMessage()];
         Setting::set('maintenance_mode', $validated['enabled'] ? '1' : '0');
 
         if (array_key_exists('message', $validated)) {
             Setting::set('maintenance_message', $validated['message'] !== '' ? $validated['message'] : null);
         }
+
+        $after = ['enabled' => Setting::maintenanceEnabled(), 'message' => Setting::maintenanceMessage()];
+        AuditLogger::log('maintenance.updated', 'Mode maintenance diubah.', null, [
+            'before' => $before,
+            'after' => $after,
+        ], $request);
 
         return response()->json([
             'success' => true,

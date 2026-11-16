@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Image;
 use App\Models\Product;
 use App\Models\Unit;
+use App\Services\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -81,6 +82,21 @@ class ImageController extends Controller
                     'order' => ((int) $model->images()->max('order')) + 1,
                 ]);
 
+                AuditLogger::log(
+                    'image.uploaded',
+                    'Foto diunggah untuk '.class_basename($model).' #'.$model->id,
+                    $model,
+                    [
+                        'image_id' => $image->id,
+                        'owner_type' => $model::class,
+                        'owner_id' => $model->id,
+                        'alt' => $image->alt,
+                    ],
+                    $request,
+                    array_merge(AuditLogger::fileMeta($file), ['file_path' => $path]),
+                    AuditLogger::subjectLabel($model)
+                );
+
                 $created[] = [
                     'id' => $image->id,
                     'url' => Storage::disk('public')->url($image->path),
@@ -112,8 +128,29 @@ class ImageController extends Controller
             ], 404);
         }
 
+        $meta = [
+            'image_id' => $image->id,
+            'owner_type' => $owner::class,
+            'owner_id' => $owner->id,
+            'alt' => $image->alt,
+        ];
+        $file = [
+            'file_name' => basename($image->path),
+            'file_path' => $image->path,
+        ];
+
         Storage::disk('public')->delete($image->path);
         $image->delete();
+
+        AuditLogger::log(
+            'image.deleted',
+            'Foto dihapus dari '.class_basename($owner).' #'.$owner->id,
+            $owner,
+            $meta,
+            request(),
+            $file,
+            AuditLogger::subjectLabel($owner)
+        );
 
         return response()->json([
             'success' => true,

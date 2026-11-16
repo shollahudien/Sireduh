@@ -4,6 +4,7 @@
     'size' => 'w-10 h-10',
     'bubble' => null,
     'tone' => 'lime',
+    'bubbleSide' => 'left',
 ])
 @php
     $tones = [
@@ -11,6 +12,9 @@
         'amber' => ['body' => 'url(#botmBodyAmber)', 'glow' => '#fbbf24'],
     ];
     $t = $tones[$tone] ?? $tones['lime'];
+    $bubblePos = $bubbleSide === 'right'
+        ? '-top-1.5 right-full mr-1'
+        : '-top-1.5 left-full ml-1';
 @endphp
 <div class="bot-mascot relative shrink-0 {{ $size }}" aria-hidden="true">
     <svg class="w-full h-full drop-shadow-lg" viewBox="0 0 100 104" fill="none">
@@ -56,7 +60,7 @@
 
     {{-- Gelembung bicara kecil --}}
     @if($bubble)
-        <span class="botm-bubble absolute -top-1.5 left-full ml-1 whitespace-nowrap rounded-full bg-white px-2 py-0.5 text-[9px] sm:text-[10px] font-bold text-green-900 shadow-md ring-1 ring-green-200 z-10">
+        <span class="botm-bubble absolute {{ $bubblePos }} whitespace-nowrap rounded-full bg-white px-2 py-0.5 text-[9px] sm:text-[10px] font-bold text-green-900 shadow-md ring-1 ring-green-200 z-10">
             {{ $bubble }}
         </span>
     @endif

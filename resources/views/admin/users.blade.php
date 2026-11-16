@@ -7,13 +7,13 @@
     {{-- Toast --}}
     <div x-show="toast.message" x-cloak x-transition
          :class="toast.isError ? 'bg-red-700' : 'bg-green-700'"
-         class="fixed bottom-6 right-6 z-50 text-white text-sm font-semibold rounded-xl shadow-xl px-5 py-3.5 flex items-center gap-3">
+         class="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 max-w-[calc(100vw-2rem)] text-white text-sm font-semibold rounded-xl shadow-xl px-5 py-3.5 flex items-center gap-3">
         <span x-text="toast.isError ? '⚠️' : '✅'"></span><span x-text="toast.message"></span>
     </div>
 
     <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         {{-- Header --}}
-        <div class="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+        <div class="px-4 sm:px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
             <div>
                 <h2 class="font-bold text-gray-800">👥 Manajemen Pengguna</h2>
                 <p class="text-xs text-gray-400">Akun staf SIRESTEDUH: Admin, Kasir, Kasir Makanan, dan Petugas Check-in.</p>
@@ -24,7 +24,7 @@
         </div>
 
         {{-- Role filter tabs --}}
-        <div class="px-6 pt-4 flex gap-1.5 border-b border-gray-100 pb-4 text-xs sm:text-sm">
+        <div class="px-4 sm:px-6 pt-4 flex flex-wrap gap-1.5 border-b border-gray-100 pb-4 text-xs sm:text-sm">
             <template x-for="tab in tabs" :key="tab.value">
                 <button type="button" @click="activeTab = tab.value"
                         :class="activeTab === tab.value ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
@@ -37,14 +37,14 @@
 
         {{-- Table --}}
         <div class="overflow-x-auto">
-            <table class="rtable w-full text-sm">
+            <table class="rtable w-full text-sm min-w-[640px]">
                 <thead>
                     <tr class="text-left text-gray-400 text-xs uppercase tracking-wide border-b">
-                        <th class="pb-3 pr-4 pl-6">Nama</th>
+                        <th class="pb-3 pr-4 pl-4 sm:pl-6">Nama</th>
                         <th class="pb-3 pr-4">Email</th>
                         <th class="pb-3 pr-4 text-center">Role</th>
                         <th class="pb-3 pr-4">Dibuat</th>
-                        <th class="pb-3 pr-6 text-right">Aksi</th>
+                        <th class="pb-3 pr-4 sm:pr-6 text-right">Aksi</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
@@ -56,7 +56,7 @@
                     </template>
                     <template x-for="user in filteredUsers" :key="user.id">
                         <tr class="hover:bg-gray-50 align-middle">
-                            <td data-label="Nama" class="py-3 pr-4 pl-6">
+                            <td data-label="Nama" class="py-3 pr-4 pl-4 sm:pl-6">
                                 <div class="flex items-center gap-3">
                                     <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white"
                                          :class="avatarColor(user.role)"
@@ -72,7 +72,7 @@
                                 <span class="text-[11px] font-bold rounded-full px-2.5 py-0.5" :class="roleBadge(user.role)" x-text="roleLabel(user.role)"></span>
                             </td>
                             <td data-label="Dibuat" class="py-3 pr-4 text-xs text-gray-500" x-text="formatDate(user.created_at)"></td>
-                            <td class="py-3 pr-6">
+                            <td class="py-3 pr-4 sm:pr-6">
                                 <div class="flex items-center justify-end gap-1.5">
                                     <button @click="openPasswordModal(user)" class="text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 transition">🔑 Password</button>
                                     <button @click="openModal(user)" class="text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5 transition">✏️ Edit</button>
@@ -91,7 +91,7 @@
     {{-- Add/Edit modal --}}
     <div x-show="isModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/50" @click="closeModal()"></div>
-        <form @submit.prevent="save()" class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+        <form @submit.prevent="save()" class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                 <h3 class="font-bold text-gray-800" x-text="form.id ? '✏️ Edit Pengguna' : '👥 Tambah Pengguna'"></h3>
                 <button type="button" @click="closeModal()" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">×</button>
@@ -138,8 +138,8 @@
     {{-- Reset password modal --}}
     <div x-show="passwordModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/50" @click="passwordModalOpen = false"></div>
-        <form @submit.prevent="resetPassword()" class="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-100">
+        <form @submit.prevent="resetPassword()" class="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full max-h-[90vh] overflow-y-auto">
+            <div class="px-4 sm:px-6 py-4 border-b border-gray-100">
                 <h3 class="font-bold text-gray-800">🔑 Reset Password</h3>
                 <p class="text-xs text-gray-400 mt-0.5" x-text="passwordUser?.name + ' (' + passwordUser?.email + ')'"></p>
             </div>

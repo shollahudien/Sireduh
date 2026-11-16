@@ -73,7 +73,7 @@ class GuestETicketTest extends TestCase
     {
         $reservation = $this->makeReservation(); // status paid, belum punya tiket
 
-        $response = $this->postJson('/status', ['order_code' => $reservation->order_code]);
+        $response = $this->withoutMiddleware()->postJson('/status', ['order_code' => $reservation->order_code]);
 
         $response->assertOk();
         $ticket = $response->json('ticket');
@@ -87,7 +87,7 @@ class GuestETicketTest extends TestCase
     {
         $reservation = $this->makeReservation(status: 'pending');
 
-        $response = $this->postJson('/status', ['order_code' => $reservation->order_code]);
+        $response = $this->withoutMiddleware()->postJson('/status', ['order_code' => $reservation->order_code]);
 
         $response->assertOk();
         $this->assertNull($response->json('ticket'));

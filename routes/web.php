@@ -1,11 +1,11 @@
 <?php
 
-use App\Http\Controllers\Admin\CheckInController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\ProofController as AdminProofController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\ReservationController;
 use App\Http\Controllers\Api\Admin\LogController as AdminLogController;
+use App\Http\Controllers\Api\CheckInController;
 use App\Http\Controllers\GuestETicketController;
 use App\Http\Controllers\GuestStatusController;
 use App\Models\ActivityLog;
@@ -110,3 +110,5 @@ Route::post('/status', [GuestStatusController::class, '__invoke'])->name('status
 Route::get('/e-ticket/{hash}/qr.png', GuestETicketController::class)
     ->name('e-ticket.qr')
     ->where('hash', '[a-f0-9]{64}');
+
+// (admin dashboard route is defined inside the admin group above)

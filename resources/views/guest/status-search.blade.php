@@ -51,7 +51,7 @@
         }
 
         .robot-float { animation: robot-float 2.6s ease-in-out infinite; }
-        .robot-think .robot-face { animation: robot-tilt 1.1s ease-in-out infinite; }
+        .robot-face.robot-think { animation: robot-tilt 1.1s ease-in-out infinite; }
         .bubble-in { animation: bubble-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
         .anim-rise { animation: anim-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
         .anim-pop { animation: anim-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
@@ -70,19 +70,21 @@
         .glow-soft { animation: glow-soft 2.4s ease-in-out infinite; }
 
         @media (prefers-reduced-motion: reduce) {
-            .robot-float, .robot-think .robot-face, .bubble-in, .anim-rise, .anim-pop,
+            .robot-float, .robot-face.robot-think, .bubble-in, .anim-rise, .anim-pop,
             .qr-scan-line, .step-dot-active, .glow-soft { animation: none !important; }
         }
     </style>
 </head>
 <body class="min-h-screen bg-stone-50 text-stone-900 antialiased">
 
-<div class="max-w-xl mx-auto px-4 py-8 sm:py-12">
+<div class="max-w-xl mx-auto px-4 py-8 sm:py-12" x-data="statusSearch()">
     {{-- ===== Mascot robot + gelembung bicara ===== --}}
     <div class="flex items-center gap-3 mb-7">
         <div class="shrink-0 relative">
-            <div class="robot-float w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-green-600 to-teal-600 ring-2 ring-lime-300/50 shadow-lg shadow-green-700/30 flex items-center justify-center">
-                <span class="robot-face text-3xl sm:text-4xl select-none" :class="searching ? 'robot-think' : ''">🤖</span>
+            <div class="robot-float w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-green-600 to-teal-600 ring-2 ring-lime-300/50 shadow-lg shadow-green-700/30 flex items-center justify-center p-1.5">
+                <div class="robot-face w-full h-full select-none" :class="searching ? 'robot-think' : ''">
+                    <x-bot-mascot size="w-full h-full" />
+                </div>
             </div>
             <span x-show="searching" class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-lime-400 ring-2 ring-white animate-ping"></span>
         </div>
@@ -101,11 +103,15 @@
     </div>
 
     <div class="text-center mb-6">
-        <h1 class="text-2xl md:text-3xl font-extrabold text-green-900">Status Reservasi</h1>
+        <span class="inline-flex items-center gap-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.16em] text-green-700 bg-white ring-1 ring-green-100 rounded-full px-3 py-1.5 mb-3 shadow-sm">
+            <span class="tech-dot w-2 h-2 rounded-full bg-green-500"></span>
+            Lacak Order Code
+        </span>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-green-900">Status Reservasi</h1>
         <p class="text-gray-500 mt-1 text-sm">Cari order code untuk melihat status pembayaran &amp; check-in</p>
     </div>
 
-    <div x-data="statusSearch()" class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         {{-- ===== Form pencarian ===== --}}
         <div x-show="!found" x-cloak>
             <div class="mb-4">
@@ -170,14 +176,14 @@
                 <div class="flex justify-between"><span class="text-gray-500">Order Code</span><span class="font-mono font-semibold text-gray-800" x-text="reservation.order_code"></span></div>
                 <div class="flex justify-between"><span class="text-gray-500">Nama Tamu</span><span class="text-gray-800 text-right" x-text="reservation.visitor?.name ?? '-'"></span></div>
                 <div class="flex justify-between"><span class="text-gray-500">Unit</span><span class="text-gray-800 text-right" x-text="reservation.unit?.name ?? '-'"></span></div>
-                <div class="flex justify-between"><span class="text-gray-500">Check-in</span><span class="text-gray-800" x-text="formatDate(reservation.check_in_date)"></span></div>
-                <div class="flex justify-between"><span class="text-gray-500">Check-out</span><span class="text-gray-800" x-text="formatDate(reservation.check_out_date)"></span></div>
+                <div class="flex justify-between"><span class="text-gray-500">Check-in</span><span class="text-gray-800" x-text="formatDateTime(reservation.check_in_date, reservation.check_in_time)"></span></div>
+                <div class="flex justify-between"><span class="text-gray-500">Check-out</span><span class="text-gray-800" x-text="formatDateTime(reservation.check_out_date, reservation.check_out_time)"></span></div>
                 <div class="flex justify-between"><span class="text-gray-500">Total</span><span class="font-bold text-green-800" x-text="formatIDR(reservation.total_price)"></span></div>
                 <div class="flex justify-between"><span class="text-gray-500">Status Pembayaran</span><span :class="fmtStatusClass(payment?.status)" x-text="paymentLabel"></span></div>
             </div>
 
             {{-- Bukti pembayaran --}}
-            <div x-show="payment?.proof_image" class="anim-rise bg-white border border-gray-200 rounded-xl p-3" style="animation-delay: 280ms">
+            <div x-show="proofUrl" class="anim-rise bg-white border border-gray-200 rounded-xl p-3" style="animation-delay: 280ms">
                 <img :src="proofUrl" class="max-w-full h-auto max-h-48 rounded border" alt="Bukti pembayaran">
             </div>
 
@@ -261,7 +267,7 @@ function statusSearch() {
                     this.reservation = data.reservation;
                     this.payment = data.payment || null;
                     this.ticket = data.ticket || null;
-                    this.proofUrl = data.payment?.proof_image ? '/storage/' + data.payment.proof_image : '';
+                    this.proofUrl = data.proof_url || '';
                 } else {
                     this.error = data.message || 'Order code tidak ditemukan.';
                     this.found = false;
@@ -301,6 +307,10 @@ function statusSearch() {
 
         get statusLabel() {
             const s = this.reservation?.status ?? '';
+            if (s === 'paid') return 'Lunas — e-tiket siap';
+            if (s === 'waiting_verification') return 'Menunggu verifikasi';
+            if (s === 'pending') return 'Menunggu pembayaran';
+            if (s === 'cancelled') return 'Dibatalkan';
             if (s === 'confirmed') return 'Terverifikasi & siap check-in';
             if (s === 'checked_in') return 'Sudah check-in';
             if (s === 'checked_out') return 'Sudah check-out';
@@ -309,6 +319,10 @@ function statusSearch() {
 
         get statusEmoji() {
             const s = this.reservation?.status ?? '';
+            if (s === 'paid') return '✅';
+            if (s === 'waiting_verification') return '⏳';
+            if (s === 'pending') return '💳';
+            if (s === 'cancelled') return '❌';
             if (s === 'checked_in') return '✅';
             if (s === 'checked_out') return '🚶';
             if (s === 'confirmed') return '⏳';
@@ -317,6 +331,10 @@ function statusSearch() {
 
         get statusBadgeClass() {
             const s = this.reservation?.status ?? '';
+            if (s === 'paid') return 'bg-green-100 text-green-700';
+            if (s === 'waiting_verification') return 'bg-yellow-100 text-yellow-800';
+            if (s === 'pending') return 'bg-blue-100 text-blue-700';
+            if (s === 'cancelled') return 'bg-red-100 text-red-700';
             if (s === 'checked_in') return 'bg-green-100 text-green-700';
             if (s === 'checked_out') return 'bg-indigo-100 text-indigo-700';
             if (s === 'confirmed') return 'bg-yellow-100 text-yellow-700';

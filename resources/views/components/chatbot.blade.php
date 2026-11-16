@@ -1,5 +1,5 @@
 {{-- Widget chatbot publik SIRESTEDUH — butuh Alpine & meta csrf-token --}}
-<div x-data="chatWidget()" x-cloak class="fixed z-50 bottom-4 right-4 flex flex-col items-end gap-3 print:hidden">
+<div x-data="chatWidget()" x-cloak class="fixed z-50 bottom-20 right-4 sm:bottom-4 flex flex-col items-end gap-3 print:hidden bot-bubble-hover">
 
     {{-- Panel chat --}}
     <div x-show="open" x-transition:enter="transition ease-out duration-200"
@@ -11,17 +11,17 @@
 
         {{-- Header --}}
         <div class="bg-green-700 text-white px-4 py-3 flex items-center gap-3 shrink-0">
-            <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-lg shrink-0">🌲</div>
+            <div class="shrink-0"><x-bot-mascot size="w-9 h-9" /></div>
             <div class="flex-1 min-w-0">
                 <p class="font-bold text-sm leading-tight">Teduh Bot</p>
                 <p class="text-[11px] text-green-100 leading-tight">Asisten BUMDes Wisata Teduh</p>
             </div>
             <span x-show="aiLoading" x-cloak class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" title="Menyiapkan suara AI…"></span>
             <button type="button" @click="toggleSound()"
-                    :title="soundOn ? 'Matikan suara Teduh Bot' : 'Nyalakan suara Teduh Bot'"
-                    :aria-label="soundOn ? 'Matikan suara Teduh Bot' : 'Nyalakan suara Teduh Bot'"
+                    :title="soundOn ? 'Matikan suara Teduh Bot' : 'Aktifkan suara Teduh Bot'"
+                    :aria-label="soundOn ? 'Matikan suara Teduh Bot' : 'Aktifkan suara Teduh Bot'"
                     class="w-8 h-8 rounded-full hover:bg-white/20 active:scale-90 transition flex items-center justify-center text-base"
-                    x-text="soundOn ? '🔊' : '🔇'">🔊</button>
+                    x-text="soundOn ? '🔊' : '🔇'">🔇</button>
             <button type="button" @click="open = false" aria-label="Tutup chat"
                     class="w-8 h-8 rounded-full hover:bg-white/20 active:scale-90 transition flex items-center justify-center">✕</button>
         </div>
@@ -58,12 +58,15 @@
             </template>
         </div>
 
-        {{-- Pemutar manual (bila autoplay diblokir browser) --}}
-        <div x-show="aiManualUrl" x-cloak class="px-3 py-1.5 border-t border-amber-100 bg-amber-50/70 flex items-center gap-2 shrink-0">
-            <span class="text-[10px] font-bold text-amber-800 uppercase tracking-wide">Suara AI</span>
-            <audio x-ref="aiPlayer" :src="aiManualUrl" controls preload="auto" class="h-7 flex-1 min-w-0"></audio>
+        {{-- Tombol WhatsApp langsung ke pengelola --}}
+        <div class="px-3 pb-1.5 shrink-0">
+            <button type="button" @click="contactWhatsApp()"
+                    class="w-full text-[11px] font-semibold bg-emerald-600 text-white rounded-xl px-3 py-2 hover:bg-emerald-700 active:scale-95 transition flex items-center justify-center gap-1.5">
+                <span>💬</span>
+                <span>Hubungi WhatsApp Pengelola</span>
+                <span x-show="userName" x-cloak class="opacity-80" x-text="`(${userName})`"></span>
+            </button>
         </div>
-
         {{-- Input --}}
         <div class="border-t border-green-100 p-2.5 flex gap-2 items-center shrink-0 bg-white">
             <input type="text" x-model="input" @keydown.enter.prevent="ask()"
@@ -75,23 +78,33 @@
         </div>
     </div>
 
-    {{-- Tombol mengambang --}}
+    {{-- Tombol mengambang: robot Teduh Bot bergerak (melayang, antena goyang, mata berkedip) --}}
     <button type="button" @click="toggle()" x-show="!open"
-            class="w-14 h-14 rounded-full bg-green-700 text-white text-2xl shadow-xl hover:bg-green-800 hover:scale-105 active:scale-95 transition flex items-center justify-center"
-            aria-label="Buka chat bantuan">
-        💬
+            class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-green-600 to-teal-600 ring-2 ring-lime-300/50 shadow-xl shadow-green-950/30 hover:scale-105 hover:ring-lime-300 active:scale-95 transition-all duration-300 flex items-center justify-center"
+            aria-label="Buka chat bantuan Teduh Bot">
+        <x-bot-mascot size="w-10 h-10 sm:w-11 sm:h-11" bubble="Halo! 👋" bubble-side="right" />
     </button>
 </div>
 
 <script>
 function chatWidget() {
+    const _sidKey = 'teduh_bot_session_id';
+    let _sid = localStorage.getItem(_sidKey);
+    if (!_sid) {
+        _sid = (crypto.randomUUID ? crypto.randomUUID() : ('sess-' + Date.now() + '-' + Math.random().toString(16).slice(2)));
+        localStorage.setItem(_sidKey, _sid);
+    }
     return {
         open: false,
         sending: false,
         input: '',
         messages: [],
         chips: ['Cara reservasi?', 'Harga glamping?', 'Cara pembayaran?', 'Cek status pesanan', 'Tiket masuk?'],
-        soundOn: localStorage.getItem('teduh_bot_voice') !== 'off',
+        sessionId: _sid,
+        userName: localStorage.getItem('teduh_bot_user_name') || '',
+        askingName: false,
+        waNumber: '{{ config('services.payment.whatsapp') }}',
+        soundOn: localStorage.getItem('teduh_bot_voice') === 'on',
         aiAudio: null,        // elemen <audio> untuk suara AI Gemini
         aiLoading: false,     // sedang minta suara AI ke server
         aiManualUrl: '',      // terisi bila autoplay diblokir — tampilkan pemutar manual
@@ -101,10 +114,10 @@ function chatWidget() {
             this.open = !this.open;
 
             if (this.open && this.messages.length === 0) {
-                const greeting = 'Halo! 👋 Saya Teduh Bot, asisten BUMDes Wisata Teduh.\nTanyakan apa saja: harga, cara reservasi, pembayaran, e-tiket QR, atau status pesanan Anda.';
+                const name = this.userName ? `, ${this.userName}` : '';
+                const greeting = `Halo${name}! 👋 Saya Teduh Bot, asisten BUMDes Wisata Teduh.`;
                 this.messages.push({ role: 'bot', text: greeting });
                 this.scrollDown();
-                this.speakReply(greeting);
             }
 
             if (!this.open) {
@@ -116,7 +129,8 @@ function chatWidget() {
             this.soundOn = !this.soundOn;
             localStorage.setItem('teduh_bot_voice', this.soundOn ? 'on' : 'off');
             if (this.soundOn && this.open) {
-                this.playPop();
+                const lastBot = [...this.messages].reverse().find(m => m.role === 'bot');
+                if (lastBot) this.speakReply(lastBot.text);
             } else {
                 this.stopSpeaking();
             }
@@ -201,35 +215,22 @@ function chatWidget() {
             }
         },
 
-        // Bunyi lembut saat bot membalas
-        playPop() {
-            if (!this.soundOn) return;
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                if (ctx.state === 'suspended') {
-                    ctx.resume();
-                }
-                const now = ctx.currentTime;
-                const o = ctx.createOscillator();
-                const g = ctx.createGain();
-                o.type = 'triangle';
-                o.frequency.setValueAtTime(660, now);
-                o.frequency.exponentialRampToValueAtTime(880, now + 0.12);
-                g.gain.setValueAtTime(0.05, now);
-                g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-                o.connect(g);
-                g.connect(ctx.destination);
-                o.start(now);
-                o.stop(now + 0.25);
-            } catch (e) {
-                // AudioContext butuh interaksi pengguna; abaikan
-            }
-        },
-
         async ask(text) {
             const message = (text ?? this.input).trim();
 
             if (!message || this.sending) return;
+
+            // Tangkap nama pengunjung bila sedang diminta (untuk kontak WhatsApp)
+            if (this.askingName) {
+                this.input = '';
+                this.userName = message.slice(0, 80);
+                localStorage.setItem('teduh_bot_user_name', this.userName);
+                this.askingName = false;
+                this.messages.push({ role: 'user', text: message });
+                this.messages.push({ role: 'bot', text: `Terima kasih, ${this.userName}! 😊\nSekarang Anda bisa hubungi pengelola via WhatsApp. Klik tombol "Hubungi WhatsApp" di bawah, pesan akan terisi otomatis dengan nama Anda.` });
+                this.scrollDown();
+                return;
+            }
 
             this.messages.push({ role: 'user', text: message });
             this.input = '';
@@ -237,6 +238,11 @@ function chatWidget() {
             this.scrollDown();
 
             try {
+                const history = this.messages
+                    .filter(m => m.role === 'user' || m.role === 'bot')
+                    .slice(-10)
+                    .map(m => ({ role: m.role, text: m.text }));
+
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
@@ -244,18 +250,16 @@ function chatWidget() {
                         'Accept': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                     },
-                    body: JSON.stringify({ message }),
+                    body: JSON.stringify({ message, history, user_name: this.userName || null, session_id: this.sessionId }),
                 });
                 const data = await res.json().catch(() => ({}));
 
                 const reply = data.reply || 'Maaf, saya sedang tidak bisa menjawab. Silakan coba lagi atau hubungi WhatsApp pengelola. 🙏';
                 this.messages.push({ role: 'bot', text: reply });
-                this.playPop();
                 this.speakReply(reply);
             } catch (e) {
-                const fallback = 'Koneksi bermasalah. Silakan coba lagi, atau buka /status untuk cek pesanan Anda. 🙏';
+                const fallback = 'Koneksi bermasalah. Silakan coba lagi, atau buka status untuk cek pesanan Anda. 🙏';
                 this.messages.push({ role: 'bot', text: fallback });
-                this.playPop();
             } finally {
                 this.sending = false;
                 this.scrollDown();
@@ -267,6 +271,21 @@ function chatWidget() {
                 const box = this.$refs.box;
                 if (box) box.scrollTop = box.scrollHeight;
             });
+        },
+
+        contactWhatsApp() {
+            if (!this.userName) {
+                this.askingName = true;
+                this.messages.push({ role: 'bot', text: 'Sebelum menghubungi WhatsApp, boleh saya tahu nama Anda? (ketik nama, lalu kirim)' });
+                this.scrollDown();
+                return;
+            }
+
+            const num = (this.waNumber || '').replace(/^0/, '62').replace(/\D/g, '');
+            const lastUser = [...this.messages].reverse().find(m => m.role === 'user')?.text || '';
+            const text = `Halo, saya ${this.userName}.${lastUser ? ' ' + lastUser : ''}`;
+            const url = `https://wa.me/${num}?text=${encodeURIComponent(text)}`;
+            window.open(url, '_blank', 'noopener');
         },
     };
 }

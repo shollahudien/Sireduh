@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\SendETicketJob;
 use App\Models\Payment;
 use App\Models\Reservation;
+use App\Services\ReservationCancellationService;
 use Illuminate\Support\Facades\DB;
 
 class PaymentController extends Controller
@@ -16,17 +17,33 @@ class PaymentController extends Controller
             'reservation.visitor',
             'reservation.unit',
         ])
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'waiting_verification', 'expired', 'failed'])
             ->latest()
             ->paginate(20);
 
         return view('admin.payments.index', compact('payments'));
     }
 
-    /**
-     * Verifikasi pembayaran berdasarkan reservation_id
-     * (konsisten dengan route PUT /admin/payments/{reservation})
-     */
+    public function rejectByReservation(Reservation $reservation, ReservationCancellationService $cancellations)
+    {
+        $cancelled = $cancellations->cancel($reservation);
+
+        if ($cancelled) {
+            $payment = Payment::where('reservation_id', $reservation->id)->first();
+
+            if ($payment !== null && $payment->status !== 'verified') {
+                $payment->update(['status' => 'rejected']);
+            }
+        }
+
+        return back()->with(
+            $cancelled ? 'success' : 'info',
+            $cancelled
+                ? 'Pembayaran ditolak dan reservasi dibatalkan.'
+                : 'Pembayaran tidak dapat ditolak pada status saat ini.',
+        );
+    }
+
     public function verifyByReservation(Reservation $reservation)
     {
         DB::transaction(function () use ($reservation) {
