@@ -7,9 +7,9 @@ Dokumen indeks untuk artefak analisis dan perancangan sistem **SIRESTEDUH**.
 | Dokumen | Deskripsi | Tautan |
 |---|---|---|
 | Kamus Data | Definisi tabel, kolom, tipe, relasi, dan catatan domain | [KAMUS_DATA.md](KAMUS_DATA.md) |
-| DFD | Diagram Konteks (Level 0), DFD Level 1, dan DFD Level 2 proses utama | [DFD.md](DFD.md) |
-| Flowchart | Alur proses reservasi, pembayaran (manual/gateway), verifikasi, check-in, POS, dan maintenance | [FLOWCHART.md](FLOWCHART.md) |
-| ERD | Entity Relationship Diagram (entitas, atribut kunci, dan relasi) | [ERD.md](ERD.md) |
+| DFD | **DFD lengkap**: Level 0 (Konteks), Level 1, dan Level 2 untuk proses 1.0–6.0 | [DFD.md](DFD.md) |
+| Flowchart | **Flowchart sistem lengkap (end-to-end)** + alur detail reservasi, pembayaran, verifikasi, check-in, POS, maintenance, autentikasi | [FLOWCHART.md](FLOWCHART.md) |
+| ERD | **ERD lengkap**: entitas, atribut kunci, relasi & kardinalitas (Mermaid) | [ERD.md](ERD.md) |
 | UAT | User Acceptance Testing (skenario, pertanyaan & jawaban/hasil diharapkan per fitur) | [UAT.md](UAT.md) |
 
 ## Cakupan

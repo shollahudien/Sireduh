@@ -1,6 +1,85 @@
 # Flowchart — SIRESTEDUH
 
-Kumpulan flowchart alur proses utama sistem **SIRESTEDUH**. Diagram menggunakan Mermaid (render di GitHub).
+Dokumen flowchart proses sistem **SIRESTEDUH**. Diagram menggunakan **Mermaid** sehingga dapat dirender langsung di GitHub.
+
+## Lokasi & Cakupan
+
+| Bagian | Isi |
+|---|---|
+| [0. Flowchart Sistem Lengkap (End-to-End)](#0-flowchart-sistem-lengkap-end-to-end) | Gambaran alur keseluruhan sistem lintas peran (tamu, admin, kasir, check-in, integrasi) |
+| [1. Reservasi Tamu (Checkout)](#1-flowchart-reservasi-tamu-checkout) | Alur pemesanan & validasi ketersediaan |
+| [2. Pembayaran Transfer Manual](#2-flowchart-pembayaran--transfer-manual-upload-bukti) | Unggah bukti & status menunggu verifikasi |
+| [3. Pembayaran Midtrans (Gateway)](#3-flowchart-pembayaran--midtrans-gateway-otomatis) | Transaksi Snap, notifikasi, & status otomatis |
+| [4. Verifikasi Pembayaran Admin](#4-flowchart-verifikasi-pembayaran-oleh-admin) | Terima/tolak, penerbitan & kirim e-ticket |
+| [5. Check-in E-Ticket](#5-flowchart-check-in-e-ticket-petugas) | Validasi QR/hash, konflik, dan pencatatan penggunaan |
+| [6. Transaksi POS](#6-flowchart-transaksi-pos-kasir--kasir-makanan) | Penjualan kasir umum/F&B sesuai peran & stok |
+| [7. Mode Maintenance & Akses](#7-flowchart-mode-maintenance--akses-sistem) | Kontrol akses saat maintenance |
+| [8. Autentikasi & Pengarahan Peran](#8-flowchart-autentikasi--pengarahan-peran) | Login, logout, redirect per peran, blokir non-admin saat maintenance |
+
+---
+
+## 0. Flowchart Sistem Lengkap (End-to-End)
+
+```mermaid
+flowchart TD
+    START([Mulai]) --> ROLE{Aktor / Akses}
+
+    %% Tamu
+    ROLE -->|Tamu Publik| G1[Lihat beranda, unit & ketersediaan]
+    G1 --> G2{Butuh reservasi/\npembelian?}
+    G2 -- Ya --> G3[Checkout: isi data, pilih unit/paket/addon, tanggal]
+    G3 --> G4{Valid & slot/stok tersedia?}
+    G4 -- Tidak --> G4E[Tampilkan error/konflik]
+    G4E --> G3
+    G4 -- Ya --> G5[Buat reservasi: pending + order_code]
+    G5 --> G6[Pilih metode pembayaran]
+    G6 -->|Transfer Manual| G7[Upload bukti bayar → waiting_verification]
+    G6 -->|Midtrans Gateway| G8[Buat Snap & bayar → notifikasi terverifikasi otomatis]
+    G7 --> G9{Verifikasi Admin}
+    G8 --> G9
+    G9 -- Ditolak --> G9R[Reservasi dibatalkan / perlu tindak lanjut]
+    G9 -- Diverifikasi/Lunas --> G10[Terbitkan e-ticket QR & kirim ke tamu]
+    G10 --> G11[Tamu cek status / terima e-ticket]
+    G11 --> G12[Check-in di lokasi: scan QR/hash]
+    G12 --> G13{Tiket valid & belum dipakai?}
+    G13 -- Ya --> G14[Check-in sukses: tiket ditandai terpakai]
+    G13 -- Tidak --> G13E[Ditolak: invalid/sudah dipakai/konflik]
+    G2 -- Tidak --> G15[Cek status pesanan / Chatbot bantuan]
+    G15 --> ENDG([Selesai])
+
+    %% Admin
+    ROLE -->|Admin| A1[Login admin]
+    A1 --> A2[Dashboard & notifikasi]
+    A2 --> A3{Tindakan}
+    A3 -->|Verifikasi/Tolak Bayar| G9
+    A3 -->|Kelola Master Data| A4[Unit, produk, paket, gambar, user]
+    A3 -->|Laporan| A5[Lihat/analisis laporan & rekap]
+    A3 -->|Operasional Sistem| A6[Log, activity/audit, maintenance, pengaturan]
+    A4 --> A2
+    A5 --> A2
+    A6 --> A2
+
+    %% Kasir
+    ROLE -->|Kasir / Kasir Makanan| K1[Login sesuai peran]
+    K1 --> K2[Muat item sesuai hak akses]
+    K2 --> K3[Pilih item, qty, metode bayar]
+    K3 --> K4{Valid, stok/slot cukup,\nmetode diizinkan?}
+    K4 -- Tidak --> K4E[Tolak & tampilkan error]
+    K4E --> K3
+    K4 -- Ya --> K5[Simpan transaksi POS & perbarui stok/slot]
+    K5 --> K6[Cetak/tampilkan struk & riwayat]
+    K6 --> ENDK([Selesai])
+
+    %% Check-in officer (akses langsung)
+    ROLE -->|Petugas Check-in| C1[Login checkin]
+    C1 --> G12
+
+    %% Sistem/otomasi
+    ROLE -->|Sistem & Integrasi| S1[Scheduler: expire pending, prune log/activity/token/cache]
+    S1 --> S2[Webhook: Midtrans notifikasi, Telegram callback]
+    S2 --> S3[Audit/log & notifikasi otomatis]
+    S3 --> ENDS([Berjalan kontinu])
+```
 
 ---
 
@@ -148,7 +227,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     A([Mulai]) --> B[Kasir login sesuai peran]
-    B --> C[Sistem muat item yang diizinkan\n(kasir umum / kasir makanan / check-in)]
+    B --> C[Sistem muat item yang diizinkan\n(kasir umum / kasir makanan / checkin sesuai mode)]
     C --> D[Kasir pilih item, jumlah, metode bayar]
     D --> E{Item & kuantitas valid?}
     E -- Tidak --> E1[Tampilkan error validasi]
@@ -185,4 +264,40 @@ flowchart TD
     F -- Tidak --> H[Tampilkan halaman maintenance 503]
     G --> Z2([Ditolak sementara])
     H --> Z2
+```
+
+---
+
+## 8. Flowchart Autentikasi & Pengarahan Peran
+
+```mermaid
+flowchart TD
+    A([Mulai]) --> B[Pengguna buka /login]
+    B --> C[Input email & password]
+    C --> D{Rate limit login\nterlampaui?}
+    D -- Ya --> D1[Tolak sementara: coba lagi nanti]
+    D1 --> Z1([Selesai])
+    D -- Tidak --> E{Kredensial valid?}
+    E -- Tidak --> E1[Audit: login gagal & tampilkan error]
+    E1 --> C
+    E -- Ya --> F[Regenerasi sesi]
+    F --> G{Maintenance aktif\ndan user bukan admin?}
+    G -- Ya --> G1[Audit: login diblokir, logout paksa, tampilkan pesan maintenance]
+    G1 --> Z1
+    G -- Tidak --> H[Audit: login sukses]
+    H --> I{Peran pengguna}
+    I -- admin --> J[Redirect /admin]
+    I -- kasir --> K[Redirect /pos]
+    I -- kasir_makanan --> L[Redirect /kasir-makanan]
+    I -- checkin --> M[Redirect /checkin]
+    I -- lainnya --> N[Redirect /]
+    J --> Z2([Sesi aktif])
+    K --> Z2
+    L --> Z2
+    M --> Z2
+    N --> Z2
+
+    Z2 --> O{Logout?}
+    O -- Ya --> P[Audit logout, invalidate sesi & token, redirect /]
+    P --> Z3([Selesai])
 ```

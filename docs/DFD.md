@@ -281,3 +281,89 @@ flowchart LR
     D4 -->|Riwayat & agregasi transaksi| P44
     P44 -->|Riwayat, rekap, item terjual| E3
 ```
+
+## DFD Level 2 — Proses 5.0 Kelola Admin, Master Data & Laporan
+
+```mermaid
+flowchart TB
+    E2[Admin]
+    D1[(D1 Tamu & Reservasi)]
+    D2[(D2 Data Pembayaran)]
+    D3[(D3 Data Master & Ketersediaan)]
+    D4[(D4 Data POS)]
+    D5[(D5 Data Log & Audit)]
+
+    P51((5.1 Autentikasi &\nKontrol Akses Admin))
+    P52((5.2 Kelola Master Data\nUnit/Produk/Paket/User/Gambar))
+    P53((5.3 Kelola Pengaturan,\nMaintenance & Retensi))
+    P54((5.4 Monitoring, Log\n& Activity))
+    P55((5.5 Laporan, Analitik\n& Pencarian))
+
+    E2 -->|Kredensial login/permintaan akses| P51
+    P51 -->|Sesi/otorisasi admin| E2
+
+    E2 -->|Data CRUD master & upload gambar| P52
+    P52 <-->|Baca/tulis unit, produk, paket, gambar, user| D3
+    P52 -->|Hasil pengelolaan & validasi| E2
+
+    E2 -->|Pengaturan maintenance/retensi/konfigurasi| P53
+    P53 <-->|Baca/tulis settings| D3
+    P53 -->|Status pengaturan & hasil aksi| E2
+
+    E2 -->|Permintaan lihat log/activity/download/clear| P54
+    P54 <-->|Baca/tulis activity & log| D5
+    P54 -->|Tampilan log, activity, hasil aksi| E2
+
+    E2 -->|Filter periode/kriteria laporan & pencarian| P55
+    D1 -->|Data reservasi/tiket| P55
+    D2 -->|Data pembayaran| P55
+    D3 -->|Data master| P55
+    D4 -->|Data transaksi POS| P55
+    D5 -->|Data audit/agregasi pendukung| P55
+    P55 -->|Dashboard, laporan, hasil pencarian| E2
+```
+
+## DFD Level 2 — Proses 6.0 Layanan Chatbot, Notifikasi & Audit
+
+```mermaid
+flowchart TB
+    E1[Tamu/Pengunjung]
+    E2[Admin]
+    E5[Midtrans]
+    E6[Layanan Notifikasi]
+    E7[Gemini AI]
+    D1[(D1 Tamu & Reservasi)]
+    D2[(D2 Data Pembayaran)]
+    D5[(D5 Data Log & Audit)]
+    D6[(D6 Data Chatbot/Sesi)]
+
+    P61((6.1 Proses Chatbot & TTS))
+    P62((6.2 Kelola Notifikasi\n& Webhook))
+    P63((6.3 Pencatatan Audit,\nActivity & Pruning))
+
+    E1 -->|Pertanyaan/pesan chat, permintaan suara| P61
+    P61 <-->|Baca konteks & simpan riwayat pesan| D6
+    P61 <-->|Prompt & respons AI/TTS| E7
+    P61 -->|Jawaban chatbot/hasil suara| E1
+
+    D1 -->|Event reservasi/tiket| P62
+    D2 -->|Event/status pembayaran| P62
+    E2 -->|Aksi kirim/resend e-ticket| P62
+    P62 -->|Kirim e-ticket/notifikasi| E6
+    E6 -->|Webhook/callback (Telegram)| P62
+    E5 -->|Notifikasi pembayaran (diteruskan dari 2.0)| P62
+    P62 -->|Hasil pemrosesan webhook/aksi| E2
+
+    E1 -->|Aktivitas pengguna publik| P63
+    E2 -->|Aktivitas admin| P63
+    P62 -->|Event notifikasi/webhook| P63
+    P61 -->|Event chatbot| P63
+    P63 <-->|Tulis/baca/prune activity & log| D5
+    P63 -->|Informasi audit untuk monitoring| E2
+```
+
+## Keterangan Kelengkapan DFD
+
+- **Level 0 (Konteks):** menggambarkan sistem SIRESTEDUH sebagai satu proses dengan seluruh entitas eksternal dan aliran data utama.
+- **Level 1:** dekomposisi ke 6 proses utama (Reservasi & Ketersediaan, Pembayaran & E-Ticket, Check-in, POS, Admin/Master/Laporan, Chatbot/Notifikasi/Audit).
+- **Level 2:** rincian subproses untuk seluruh proses utama (1.0–6.0) beserta interaksi ke data store dan entitas eksternal terkait.
