@@ -685,6 +685,23 @@ php artisan config:clear && php artisan cache:clear && php artisan route:clear &
 tail -n 200 storage/logs/laravel.log
 ```
 
+
+---
+
+## 📚 Dokumentasi Sistem (Kamus Data, DFD, Flowchart, ERD)
+
+Dokumentasi analisis & perancangan sistem tersedia di folder [`docs/`](docs/):
+
+| Dokumen | Isi |
+|---|---|
+| [Dokumentasi Sistem (Indeks)](docs/DOKUMENTASI_SISTEM.md) | Ringkasan & tautan seluruh artefak dokumentasi |
+| [Kamus Data](docs/KAMUS_DATA.md) | Definisi tabel/entitas, kolom, tipe data, relasi, dan catatan domain |
+| [DFD](docs/DFD.md) | Data Flow Diagram Level 0 (Konteks), Level 1, dan Level 2 proses utama |
+| [Flowchart](docs/FLOWCHART.md) | Alur proses reservasi, pembayaran (manual/Midtrans), verifikasi admin, check-in, POS, dan maintenance |
+| [ERD](docs/ERD.md) | Entity Relationship Diagram (entitas, atribut kunci, relasi/kardinalitas) |
+
+> Diagram dibuat menggunakan **Mermaid** sehingga dapat langsung dirender di GitHub.
+
 ---
 
 ## 📁 Gambaran Struktur Proyek
